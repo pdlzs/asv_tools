@@ -3,7 +3,9 @@
 使用 ASV Python API 进行 benchmark 对比
 """
 import argparse
+import io
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -20,7 +22,8 @@ def load_asv_module(asv_project_dir: str):
         from asv.results import iter_results_for_machine_and_hash
         from asv.machine import iter_machine_files
         from asv.util import load_json
-        return config, iter_results_for_machine_and_hash, iter_machine_files, load_json
+        from asv.commands.compare import Compare
+        return config, iter_results_for_machine_and_hash, iter_machine_files, load_json, Compare
     except ImportError as e:
         print(f"错误: 无法加载 ASV 模块: {e}")
         print(f"请确保在 {asv_project_dir} 中有 ASV 配置文件 (asv.conf.json)")
@@ -29,7 +32,7 @@ def load_asv_module(asv_project_dir: str):
 
 def get_benchmark_results(asv_project_dir: str, commit_hash: str, machine_name: Optional[str] = None) -> Dict:
     """获取指定 commit 的 benchmark 结果"""
-    config, _, iter_machine_files, load_json = load_asv_module(asv_project_dir)
+    config, config_module, iter_machine_files, load_json, Compare = load_asv_module(asv_project_dir)
 
     conf = config.Config()
     conf.load(str(Path(asv_project_dir) / "asv.conf.json"))
@@ -154,6 +157,8 @@ def main():
                        help='commit 选择策略')
     parser.add_argument('--show-all', action='store_true',
                        help='显示所有 benchmark（包括未变化的）')
+    parser.add_argument('--use-official-compare', action='store_true',
+                       help='使用 ASV 官方 Compare.print_table() 输出表格')
     parser.add_argument('--output', required=True, help='输出 JSON 文件路径')
 
     args = parser.parse_args()
@@ -161,7 +166,7 @@ def main():
     # 获取最新 commit
     def get_latest_commit(asv_dir: str) -> str:
         """获取最新的 commit hash"""
-        config, _, _, load_json = load_asv_module(asv_dir)
+        config, _, _, load_json, Compare = load_asv_module(asv_dir)
         conf = config.Config()
         conf.load(str(Path(asv_dir) / "asv.conf.json"))
 
@@ -205,56 +210,186 @@ def main():
         print("错误: 无法找到要比较的 commit")
         sys.exit(1)
 
-    print(f"解析 {args.server1} 的 ASV 结果...")
-    results1 = get_benchmark_results(args.asv_dir1, commit1, args.machine1)
+    if args.use_official_compare:
+        print("使用 ASV 官方 Compare API 进行对比...")
 
-    print(f"解析 {args.server2} 的 ASV 结果...")
-    results2 = get_benchmark_results(args.asv_dir2, commit2, args.machine2)
+        config, _, _, _, Compare = load_asv_module(args.asv_dir1)
 
-    print(f"比较 commit: {commit1} vs {commit2}")
+        conf = config.Config()
+        conf.load(str(Path(args.asv_dir1) / "asv.conf.json"))
 
-    comparison = compare_benchmarks(results1, results2, commit1, commit2)
+        machine = args.machine1 if args.machine1 else args.machine2
+        if machine is None:
+            machines = []
+            for path in Path(args.asv_dir1).glob("results/*/machine.json"):
+                try:
+                    d = json.loads(path.read_text())
+                    machines.append(d['machine'])
+                except (json.JSONDecodeError, IOError):
+                    continue
 
-    if not args.show_all:
-        comparison = [c for c in comparison if abs(c['diff_percent']) > 1.0]
+            if len(machines) == 1:
+                machine = machines[0]
+            elif len(machines) > 1:
+                print(f"警告: 找到多台机器: {machines}，使用第一台: {machines[0]}")
+                machine = machines[0]
+            else:
+                print("错误: 未找到任何机器结果")
+                sys.exit(1)
 
-    report = {
-        "server1": args.server1,
-        "server2": args.server2,
-        "commit1": commit1,
-        "commit2": commit2,
-        "commit1_info": {
-            "benchmarks": {k: v['value'] for k, v in results1.items()},
-            "machine": args.machine1 or "auto",
-            "machine_info": {},
-            "path": args.asv_dir1,
-        },
-        "commit2_info": {
-            "benchmarks": {k: v['value'] for k, v in results2.items()},
-            "machine": args.machine2 or "auto",
-            "machine_info": {},
-            "path": args.asv_dir2,
-        },
-        "benchmarks": comparison,
-        "summary": {
-            "total": len(comparison),
-            "faster": sum(1 for c in comparison if c['diff_percent'] < 0),
-            "slower": sum(1 for c in comparison if c['diff_percent'] > 0),
-            "same": sum(1 for c in comparison if abs(c['diff_percent']) < 1.0),
+        try:
+            original_stdout = sys.stdout
+            captured_output = io.StringIO()
+            sys.stdout = captured_output
+
+            original_cwd = os.getcwd()
+            os.chdir(args.asv_dir1)
+
+            Compare.print_table(
+                conf=conf,
+                hash_1=commit1,
+                hash_2=commit2,
+                factor=1.0,
+                split=False,
+                only_changed=not args.show_all,
+                sort='default',
+                machine=machine,
+                env_names=None,
+                commit_names={
+                    commit1: f"{args.server1}",
+                    commit2: f"{args.server2}",
+                }
+            )
+
+            os.chdir(original_cwd)
+            sys.stdout = original_stdout
+            table_output = captured_output.getvalue()
+            print(table_output, end='')
+
+            txt_output_path = Path(args.output).parent / f"{args.server1}_vs_{args.server2}_table.txt"
+            with open(txt_output_path, 'w', encoding='utf-8') as f:
+                f.write(table_output)
+            print(f"\n表格已保存到: {txt_output_path}")
+
+            try:
+                import openpyxl
+                import openpyxl.utils
+                from openpyxl.styles import Font, PatternFill, Alignment
+
+                lines = [line for line in table_output.split('\n') if line.strip()]
+                
+                table_start_idx = -1
+                for i, line in enumerate(lines):
+                    if '|' in line and 'Change' in line and 'Before' in line:
+                        table_start_idx = i
+                        break
+                
+                if table_start_idx == -1:
+                    print("警告: 无法解析表格，跳过 Excel 生成")
+                else:
+                    table_lines = lines[table_start_idx:]
+                    
+                    excel_output_path = Path(args.output).parent / f"{args.server1}_vs_{args.server2}_table.xlsx"
+                    wb = openpyxl.Workbook()
+                    ws = wb.active
+                    ws.title = "ASV Compare Table"
+
+                    for i, line in enumerate(table_lines):
+                        if not line.strip():
+                            continue
+                        
+                        cols = [col.strip() for col in line.split('|')]
+                        cols = cols[1:-1]
+
+                        for j, col in enumerate(cols):
+                            cell = ws.cell(row=i+1, column=j+1, value=col)
+                            
+                            if i == 0:
+                                cell.font = Font(bold=True)
+                                cell.fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+                                cell.alignment = Alignment(horizontal='center')
+                            elif i == 1:
+                                cell.fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
+
+                    for col_idx, column in enumerate(ws.columns, start=1):
+                        max_length = 0
+                        column_cells = [cell for cell in column]
+                        for cell in column_cells:
+                            try:
+                                if len(str(cell.value)) > max_length:
+                                    max_length = len(str(cell.value))
+                            except:
+                                pass
+                        adjusted_width = (max_length + 2) * 1.2
+                        adjusted_width = min(adjusted_width, 50)
+                        ws.column_dimensions[openpyxl.utils.get_column_letter(col_idx)].width = adjusted_width
+
+                    wb.save(excel_output_path)
+                    print(f"表格已保存到: {excel_output_path}")
+
+            except ImportError:
+                print("警告: 未安装 openpyxl，跳过 Excel 表格生成")
+            except Exception as e:
+                print(f"警告: 生成 Excel 表格失败: {e}")
+
+        except Exception as e:
+            os.chdir(original_cwd)
+            sys.stdout = original_stdout
+            print(f"错误: 使用官方 Compare API 失败: {e}")
+            print("回退到自定义对比...")
+            args.use_official_compare = False
+
+    # 无论是否使用官方 Compare API，都执行自定义对比以生成 JSON 结果
+        print(f"解析 {args.server1} 的 ASV 结果...")
+        results1 = get_benchmark_results(args.asv_dir1, commit1, args.machine1)
+
+        print(f"解析 {args.server2} 的 ASV 结果...")
+        results2 = get_benchmark_results(args.asv_dir2, commit2, args.machine2)
+
+        print(f"比较 commit: {commit1} vs {commit2}")
+
+        comparison = compare_benchmarks(results1, results2, commit1, commit2)
+
+        if not args.show_all:
+            comparison = [c for c in comparison if abs(c['diff_percent']) > 1.0]
+
+        report = {
+            "server1": args.server1,
+            "server2": args.server2,
+            "commit1": commit1,
+            "commit2": commit2,
+            "commit1_info": {
+                "benchmarks": {k: v['value'] for k, v in results1.items()},
+                "machine": args.machine1 or "auto",
+                "machine_info": {},
+                "path": args.asv_dir1,
+            },
+            "commit2_info": {
+                "benchmarks": {k: v['value'] for k, v in results2.items()},
+                "machine": args.machine2 or "auto",
+                "machine_info": {},
+                "path": args.asv_dir2,
+            },
+            "benchmarks": comparison,
+            "summary": {
+                "total": len(comparison),
+                "faster": sum(1 for c in comparison if c['diff_percent'] < 0),
+                "slower": sum(1 for c in comparison if c['diff_percent'] > 0),
+                "same": sum(1 for c in comparison if abs(c['diff_percent']) < 1.0),
+            }
         }
-    }
 
-    output_path = Path(args.output)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path = Path(args.output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(output_path, 'w', encoding='utf-8') as f:
-        json.dump(report, f, indent=2, ensure_ascii=False)
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(report, f, indent=2, ensure_ascii=False)
 
-    print(f"对⽐结果已保存保存到: {output_path}")
-    print(f"总共 {len(comparison)} 个 benchmark")
-    print(f"  - 更快: {report['summary']['faster']}")
-    print(f"  - 更慢: {report['summary']['slower']}")
-    print(f"  - 相同: {report['summary']['same']}")
+        print(f"对比结果已保存到: {output_path}")
+        print(f"总共 {len(comparison)} 个 benchmark")
+        print(f"  - 更快: {report['summary']['faster']}")
+        print(f"  - 更慢: {report['summary']['slower']}")
+        print(f"  - 相同: {report['summary']['same']}")
 
 
 if __name__ == '__main__':

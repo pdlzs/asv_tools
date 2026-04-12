@@ -21,6 +21,7 @@ SCRIPT2=""
 CUSTOM_INFO_ARG=""
 DRY_RUN=false
 SKIP_RUN=false
+USE_OFFICIAL_COMPARE=false
 
 # 用法: execute_script_on_host <host> <user> <port> <work_dir> [script_file]
 #   - 若提供 script_file，则读取文件内容并通过 stdin 传递给 bash -s
@@ -55,18 +56,20 @@ print_usage() {
     echo "用法: $0 <server1> <server2> [选项]"
     echo ""
     echo "选项:"
-    echo "  --script1 <file>    Server1的自定义脚本"
-    echo "  --script2 <file>    Server2的自定义脚本"
-    echo "  --info <string>     输出文件名的自定义标识"
-    echo "  --dry-run           只显示将要执行的命令，不实际执行"
-    echo "  --skip-run          跳过ASV运行步骤，直接使用已有结果"
-    echo "  --help              显示此帮助信息"
+    echo "  --script1 <file>        Server1的自定义脚本"
+    echo "  --script2 <file>        Server2的自定义脚本"
+    echo "  --info <string>         输出文件名的自定义标识"
+    echo "  --dry-run               只显示将要执行的命令，不实际执行"
+    echo "  --skip-run              跳过ASV运行步骤，直接使用已有结果"
+    echo "  --use-official-compare  使用ASV官方Compare.print_table()输出表格"
+    echo "  --help                  显示此帮助信息"
     echo ""
     echo "示例:"
     echo "  $0 zen4 kunpeng920b"
     echo "  $0 zen4 kunpeng920b --info 'numpy_v2.0'"
     echo "  $0 zen4 kunpeng920b --script1 script1.sh --script2 script2.sh"
     echo "  $0 local_test local_test --skip-run  # 使用已有结果"
+    echo "  $0 zen4 kunpeng920b --use-official-compare  # 使用官方Compare API"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -89,6 +92,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --skip-run)
             SKIP_RUN=true
+            shift
+            ;;
+        --use-official-compare)
+            USE_OFFICIAL_COMPARE=true
             shift
             ;;
         --help|-h)
@@ -261,10 +268,10 @@ else
     fi
 fi
 
-if [ "$DRY_RUN" = true ]; then
-    log_info "[DRY-RUN] 跳过后续步骤（dry-run模式）"
-    exit 0
-fi
+# if [ "$DRY_RUN" = true ]; then
+#     log_info "[DRY-RUN] 跳过后续步骤（dry-run模式）"
+#     exit 0
+# fi
 
 log_info "获取ASV结果..."
 
@@ -289,6 +296,12 @@ cat > "$SERVER1_RESULTS_LOCAL/asv.conf.json" << 'EOF'
 }
 EOF
 
+# 如果 benchmarks.json 在 results/ 目录下，复制到项目根目录（ASV Compare API 需要）
+if [ -f "$SERVER1_RESULTS_LOCAL/results/benchmarks.json" ]; then
+    cp "$SERVER1_RESULTS_LOCAL/results/benchmarks.json" "$SERVER1_RESULTS_LOCAL/benchmarks.json"
+    log_info "已复制 benchmarks.json 到项目根目录（ASV Compare API 需要）"
+fi
+
 log_info "从 $SERVER2 下载ASV结果..."
 SERVER2_RESULTS_LOCAL="$OUTPUT_DIR_PATH/${SERVER2}_results"
 mkdir -p "$SERVER2_RESULTS_LOCAL"
@@ -309,6 +322,12 @@ cat > "$SERVER2_RESULTS_LOCAL/asv.conf.json" << 'EOF'
     "results_dir": "results"
 }
 EOF
+
+# 如果 benchmarks.json 在 results/ 目录下，复制到项目根目录（ASV Compare API 需要）
+if [ -f "$SERVER2_RESULTS_LOCAL/results/benchmarks.json" ]; then
+    cp "$SERVER2_RESULTS_LOCAL/results/benchmarks.json" "$SERVER2_RESULTS_LOCAL/benchmarks.json"
+    log_info "已复制 benchmarks.json 到项目根目录（ASV Compare API 需要）"
+fi
 
 log_info "验证下载的ASV结果..."
 if [ ! -d "$SERVER1_RESULTS_LOCAL" ] || [ -z "$(ls -A $SERVER1_RESULTS_LOCAL)" ]; then
@@ -338,6 +357,10 @@ COMPARE_CMD="python3 \"$SCRIPT_DIR/python/asv_compare_wrapper.py\" \
 
 if [ "$SHOW_ALL" = "true" ]; then
     COMPARE_CMD="$COMPARE_CMD --show-all"
+fi
+
+if [ "$USE_OFFICIAL_COMPARE" = "true" ]; then
+    COMPARE_CMD="$COMPARE_CMD --use-official-compare"
 fi
 
 log_info "执行对比命令: $COMPARE_CMD"
