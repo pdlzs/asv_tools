@@ -21,7 +21,6 @@ SCRIPT2=""
 CUSTOM_INFO_ARG=""
 DRY_RUN=false
 SKIP_RUN=false
-USE_OFFICIAL_COMPARE=false
 
 # 用法: execute_script_on_host <host> <user> <port> <work_dir> [script_file]
 #   - 若提供 script_file，则读取文件内容并通过 stdin 传递给 bash -s
@@ -61,7 +60,6 @@ print_usage() {
     echo "  --info <string>         输出文件名的自定义标识"
     echo "  --dry-run               只显示将要执行的命令，不实际执行"
     echo "  --skip-run              跳过ASV运行步骤，直接使用已有结果"
-    echo "  --use-official-compare  使用ASV官方Compare.print_table()输出表格"
     echo "  --help                  显示此帮助信息"
     echo ""
     echo "示例:"
@@ -69,7 +67,6 @@ print_usage() {
     echo "  $0 zen4 kunpeng920b --info 'numpy_v2.0'"
     echo "  $0 zen4 kunpeng920b --script1 script1.sh --script2 script2.sh"
     echo "  $0 local_test local_test --skip-run  # 使用已有结果"
-    echo "  $0 zen4 kunpeng920b --use-official-compare  # 使用官方Compare API"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -92,10 +89,6 @@ while [[ $# -gt 0 ]]; do
             ;;
         --skip-run)
             SKIP_RUN=true
-            shift
-            ;;
-        --use-official-compare)
-            USE_OFFICIAL_COMPARE=true
             shift
             ;;
         --help|-h)
@@ -194,9 +187,6 @@ fi
 
 OUTPUT_DIR_PATH="$CMP_RESULTS_DIR/$OUTPUT_DIR_NAME"
 mkdir -p "$OUTPUT_DIR_PATH"
-
-OUTPUT_FILE="${SERVER1}_vs_${SERVER2}.xlsx"
-OUTPUT_PATH="$OUTPUT_DIR_PATH/$OUTPUT_FILE"
 
 log_info "输出目录: $OUTPUT_DIR_PATH"
 
@@ -353,14 +343,15 @@ COMPARE_CMD="python3 \"$SCRIPT_DIR/python/asv_compare_wrapper.py\" \
     --server1 \"$SERVER1\" \
     --server2 \"$SERVER2\" \
     --strategy \"$COMPARE_STRATEGY\" \
-    --output \"$OUTPUT_DIR_PATH/compare_result.json\""
+    --output \"$OUTPUT_DIR_PATH\""
+
+# 如果配置了 machine_name，传递给 Python 脚本
+if [ -n "$SERVER1_MACHINE_NAME" ]; then
+    COMPARE_CMD="$COMPARE_CMD --machine \"$SERVER1_MACHINE_NAME\""
+fi
 
 if [ "$SHOW_ALL" = "true" ]; then
     COMPARE_CMD="$COMPARE_CMD --show-all"
-fi
-
-if [ "$USE_OFFICIAL_COMPARE" = "true" ]; then
-    COMPARE_CMD="$COMPARE_CMD --use-official-compare"
 fi
 
 log_info "执行对比命令: $COMPARE_CMD"
@@ -369,16 +360,4 @@ eval "$COMPARE_CMD" || {
     exit 1
 }
 
-COMPARE_RESULT_FILE="$OUTPUT_DIR_PATH/compare_result.json"
-log_info "对比结果已保存到: $COMPARE_RESULT_FILE"
-
-log_info "生成Excel对比报告..."
-
-python3 "$SCRIPT_DIR/python/excel_generator.py" \
-    --compare-result "$COMPARE_RESULT_FILE" \
-    --output "$OUTPUT_PATH" || {
-    log_error "生成Excel报告失败"
-    exit 1
-}
-
-log_info "完成！报告已保存到: $OUTPUT_PATH"
+log_info "完成！表格已保存到: $OUTPUT_DIR_PATH"

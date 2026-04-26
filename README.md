@@ -7,9 +7,10 @@
 - 支持多台服务器配置
 - 支持自定义执行脚本
 - 自动下载ASV结果并生成对比报告
-- 生成详细的Excel对比报告
+- 使用ASV官方Compare API生成对比表格
 - 支持Docker容器场景
 - 支持dry-run模式测试
+- 支持skip-run模式（直接使用已有结果）
 
 ## 安装
 
@@ -17,8 +18,9 @@
 
 - Bash 4.0+
 - Python 3.6+
-- SSH免密登录配置
+- SSH免密登录配置（如需远程服务器）
 - jq (JSON处理工具)
+- ASV (airspeed velocity)
 
 ### 安装步骤
 
@@ -49,6 +51,18 @@ servers:
     asv_project_dir: "/path/to/benchmark"
 
 default_servers: ["zen4", "kunpeng920b"]
+```
+
+### 本地测试配置
+
+使用 `host: "local"` 可以跳过SSH，直接本地执行：
+
+```yaml
+servers:
+  local_test:
+    host: "local"
+    username: "your-username"
+    asv_project_dir: "/path/to/benchmark"
 ```
 
 ### 主配置 (config.sh)
@@ -121,35 +135,32 @@ EOF
 
 测试配置而不实际执行：
 ```bash
-
 ./run_compare.sh zen4 kunpeng920b --dry-run
+```
+
+### Skip-run模式
+
+跳过ASV运行，直接使用已有结果对比：
+```bash
+./run_compare.sh local_test local_test --skip-run
 ```
 
 ## 输出
 
-工具会在 `output/` 目录下生成以下文件：
+工具会在 `cmp_results/` 目录下生成以下文件：
 
-- `TIMESTAMP_server1_vs_server2.xlsx` - Excel对比报告
-- `compare_result_TIMESTAMP.json` - JSON格对比结果（包含详细数据）
+- `TIMESTAMP_server1_vs_server2_table.txt` - ASV官方对比表格（文本格式）
+- `TIMESTAMP_server1_vs_server2_table.xlsx` - Excel对比表格
 
-## Excel报告内容
+## ASV对比表格说明
 
-Excel报告包含两个sheet：
+ASV官方Compare API生成的表格包含：
 
-1. **概览** - 统计信息和摘要
-   - 服务器信息
-   - Benchmark数量
-   - 性能统计（更快/更慢/相同）
-   - 加速比统计（平均/最大/最小）
-   - 最快和最慢的benchmark
-
-2. **详细对比** - 每个benchmark的详细数据
-   - Benchmark名称
-   - Server1时间
-   - Server2时间
-   - 加速比
-   - 差异百分比
-   - 性能评估（带颜色标识）
+- Benchmark名称
+- Before（基准值）
+- After（对比值）
+- Change（变化百分比）
+- 统计信息
 
 ## 故障排除
 
@@ -170,6 +181,13 @@ pip install -r python/requirements.txt
 ### ASV结果未找到
 
 检查 `servers.yaml` 中的 `asv_project_dir` 配置是否正确。
+
+### ASV模块加载失败
+
+确保ASV已正确安装：
+```bash
+pip install asv
+```
 
 ## 许可证
 
