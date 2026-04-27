@@ -1,0 +1,51 @@
+# Docker 容器场景配置示例
+# 使用方法: python main.py cmp cmp_docker.yaml
+
+machines:
+  server1:
+    host: "zen4.example.com"
+    port: 22
+    username: "user"
+    # 容器内的 ASV 项目目录路径（用于下载结果）
+    # 需要确保容器内路径与宿主机路径映射正确
+    asv_project_dir: "/home/user/benchmark"
+
+  server2:
+    host: "kunpeng920b.example.com"
+    port: 22
+    username: "user"
+    asv_project_dir: "/home/user/benchmark"
+
+scripts:
+  server1: |
+    # 在 Docker 容器中执行 ASV benchmark
+    docker exec numpy_bench bash -c '
+      source /opt/conda/bin/activate numpy_dev
+      cd /workspace/numpy/benchmarks
+      rm -rf results
+      asv run -b "bench_reduce" -b "bench_app" --python=same
+    '
+    # 将容器内的结果目录复制到宿主机（供后续下载）
+    docker cp numpy_bench:/workspace/numpy/benchmarks/results /home/user/benchmark/results
+
+  server2: |
+    # 在 Docker 容器中执行 ASV benchmark
+    docker exec numpy_bench bash -c '
+      source /opt/conda/bin/activate numpy_dev
+      cd /workspace/numpy/benchmarks
+      rm -rf results
+      asv run -b "bench_reduce" --python=same
+    '
+    # 将容器内的结果目录复制到宿主机
+    docker cp numpy_bench:/workspace/numpy/benchmarks/results /home/user/benchmark/results
+
+compare:
+  show_all: true
+
+output:
+  dir: "./cmp_results"
+  custom_info: "docker_test"
+
+runtime:
+  ssh_timeout: 30
+  log_level: "INFO"

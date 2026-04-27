@@ -1,0 +1,39 @@
+# ASV Benchmark 对比配置文件
+# 使用方法: python main.py cmp cmp.yaml
+
+machines:
+  server1:
+    host: "zen4.example.com"      # 或 "local" 表示本地执行
+    port: 22
+    username: "user"
+    asv_project_dir: "/home/user/benchmark"
+
+  server2:
+    host: "kunpeng920b.example.com"
+    port: 22
+    username: "user"
+    asv_project_dir: "/home/user/benchmark"
+
+scripts:
+  server1: |
+    source ~/miniconda3/bin/activate myenv
+    cd {work_dir}
+    rm -rf results
+    asv run -b "bench_app" --python=same
+
+  server2: |
+    source ~/miniconda3/bin/activate myenv
+    cd {work_dir}
+    rm -rf results
+    asv run -b "bench_reduce" --python=same
+
+compare:
+  show_all: true                  # 是否显示未变化的 benchmark
+
+output:
+  dir: "./cmp_results"
+  custom_info: "numpy_test"       # 可选，自定义标识
+
+runtime:
+  ssh_timeout: 30
+  log_level: "INFO"

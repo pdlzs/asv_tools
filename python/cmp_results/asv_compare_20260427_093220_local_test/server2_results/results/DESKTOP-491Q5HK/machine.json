@@ -1,0 +1,9 @@
+{
+    "arch": "x86_64",
+    "cpu": "Intel(R) Core(TM) i7-14700",
+    "machine": "DESKTOP-491Q5HK",
+    "num_cpu": "28",
+    "os": "Linux 6.6.87.2-microsoft-standard-WSL2",
+    "ram": "16204936",
+    "version": 1
+}

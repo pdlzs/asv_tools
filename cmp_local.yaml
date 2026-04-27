@@ -1,0 +1,38 @@
+# 本地测试配置
+
+machines:
+  server1:
+    host: "local"
+    hostname: "z4"       # 建议 ≤4 字符，ASV 显示 z4-8bc
+    username: "luo"
+    asv_project_dir: "/mnt/d/code/numpy/benchmarks"
+
+  server2:
+    host: "local"
+    hostname: "kp"       # 建议 ≤4 字符，ASV 显示 kp-8bc
+    username: "luo"
+    asv_project_dir: "/mnt/d/code/numpy/benchmarks_server2"
+
+scripts:
+  server1: |
+    cd /mnt/d/code/numpy/benchmarks
+    rm -rf results
+    asv machine --yes --machine compare_machine
+    asv run -b "bench_reduce" --python=same --set-commit-hash HEAD
+
+  server2: |
+    cd /mnt/d/code/numpy/benchmarks
+    rm -rf results
+    asv machine --yes --machine compare_machine
+    asv run -b "bench_reduce" --python=same --set-commit-hash HEAD
+
+compare:
+  show_all: true
+
+output:
+  dir: "./cmp_results"
+  custom_info: "local_test"
+
+runtime:
+  ssh_timeout: 30
+  log_level: "INFO"

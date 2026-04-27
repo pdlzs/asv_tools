@@ -1,0 +1,124 @@
+"""Configuration handling for ASV benchmark comparison"""
+
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Dict, List, Optional
+import yaml
+
+
+@dataclass
+class MachineConfig:
+    """单台机器配置"""
+    name: str
+    host: str                           # "local" 表示本地执行
+    asv_project_dir: str
+    hostname: Optional[str] = None      # ASV compare 显示名称（可选，默认使用 name）
+    port: int = 22
+    username: Optional[str] = None
+
+    @property
+    def display_name(self) -> str:
+        """ASV compare 显示名称，优先使用 hostname"""
+        return self.hostname if self.hostname else self.name
+
+    @property
+    def is_local(self) -> bool:
+        return self.host == "local"
+
+
+@dataclass
+class CompareConfig:
+    """对比配置"""
+    show_all: bool = True
+
+
+@dataclass
+class OutputConfig:
+    """输出配置"""
+    dir: str = "./cmp_results"
+    custom_info: Optional[str] = None
+
+
+@dataclass
+class RuntimeConfig:
+    """运行时配置"""
+    ssh_timeout: int = 30
+    log_level: str = "INFO"
+
+
+@dataclass
+class Config:
+    """完整配置"""
+    machines: Dict[str, MachineConfig]
+    scripts: Dict[str, str]
+    compare: CompareConfig
+    output: OutputConfig
+    runtime: RuntimeConfig
+
+    def validate(self) -> List[str]:
+        """验证配置，返回错误列表"""
+        errors = []
+
+        # 必须恰好 2 台机器
+        if len(self.machines) != 2:
+            errors.append(f"必须恰好配置 2 台机器，当前 {len(self.machines)} 台")
+
+        # 验证每台机器的必填字段
+        for name, machine in self.machines.items():
+            if not machine.host:
+                errors.append(f"机器 {name} 缺少 host 配置")
+            if not machine.asv_project_dir:
+                errors.append(f"机器 {name} 缺少 asv_project_dir 配置")
+            if not machine.is_local and not machine.username:
+                errors.append(f"远程机器 {name} 缺少 username 配置")
+
+        # 验证每台机器都有对应的脚本
+        for name in self.machines.keys():
+            if name not in self.scripts:
+                errors.append(f"机器 {name} 缺少对应的脚本配置")
+
+        return errors
+
+    def get_script_for_machine(self, machine_name: str) -> str:
+        """获取指定机器的脚本"""
+        return self.scripts.get(machine_name, "")
+
+
+def load_config(config_path: str) -> Config:
+    """加载 YAML 配置文件"""
+    with open(config_path, 'r') as f:
+        data = yaml.safe_load(f)
+
+    # 解析 machines
+    machines = {}
+    for name, m in data.get("machines", {}).items():
+        machines[name] = MachineConfig(
+            name=name,
+            host=m["host"],
+            asv_project_dir=m["asv_project_dir"],
+            hostname=m.get("hostname"),
+            port=m.get("port", 22),
+            username=m.get("username")
+        )
+
+    # 解析其他配置
+    scripts = data.get("scripts", {})
+    compare_data = data.get("compare", {})
+    output_data = data.get("output", {})
+    runtime_data = data.get("runtime", {})
+
+    return Config(
+        machines=machines,
+        scripts=scripts,
+        compare=CompareConfig(
+            show_all=compare_data.get("show_all", True)
+        ),
+        output=OutputConfig(
+            dir=output_data.get("dir", "./cmp_results"),
+            custom_info=output_data.get("custom_info")
+        ),
+        runtime=RuntimeConfig(
+            ssh_timeout=runtime_data.get("ssh_timeout", 30),
+            log_level=runtime_data.get("log_level", "INFO")
+        )
+    )

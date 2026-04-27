@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(asv compare *)",
+      "Bash(python3 *)"
+    ]
+  }
+}
