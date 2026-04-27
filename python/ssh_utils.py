@@ -53,55 +53,110 @@ class SSHClient:
         except (subprocess.TimeoutExpired, Exception):
             return False
 
-    def execute(self, command: str, work_dir: Optional[str] = None) -> Tuple[bool, str]:
+    def execute(self, command: str, work_dir: Optional[str] = None, stream_output: bool = True) -> Tuple[bool, str]:
         """
         执行命令
+
+        Args:
+            command: 要执行的命令
+            work_dir: 工作目录
+            stream_output: 是否实时输出到终端（默认 True）
 
         Returns:
             (success, output) 元组
         """
         if self.config.is_local:
-            return self._execute_local(command, work_dir)
+            return self._execute_local(command, work_dir, stream_output)
         else:
-            return self._execute_remote(command, work_dir)
+            return self._execute_remote(command, work_dir, stream_output)
 
-    def _execute_local(self, command: str, work_dir: Optional[str]) -> Tuple[bool, str]:
+    def _execute_local(self, command: str, work_dir: Optional[str], stream_output: bool) -> Tuple[bool, str]:
         """本地执行命令"""
+        import sys
         try:
-            result = subprocess.run(
-                command,
-                shell=True,
-                capture_output=True,
-                text=True,
-                cwd=work_dir
-            )
-            output = result.stdout + result.stderr
+            if stream_output:
+                # 实时输出到终端
+                result = subprocess.run(
+                    command,
+                    shell=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    cwd=work_dir,
+                    bufsize=1  # 行缓冲
+                )
+                output = result.stdout
+                # 实时打印输出
+                for line in output.splitlines():
+                    print(line)
+            else:
+                # 捕获输出
+                result = subprocess.run(
+                    command,
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    cwd=work_dir
+                )
+                output = result.stdout + result.stderr
             return result.returncode == 0, output
         except Exception as e:
             return False, str(e)
 
-    def _execute_remote(self, command: str, work_dir: Optional[str]) -> Tuple[bool, str]:
+    def _execute_remote(self, command: str, work_dir: Optional[str], stream_output: bool) -> Tuple[bool, str]:
         """远程执行命令"""
+        import sys
         full_command = f"cd {work_dir} && bash -s" if work_dir else "bash -s"
 
         try:
-            result = subprocess.run(
-                [
-                    "ssh",
-                    "-o", f"ConnectTimeout={self.config.timeout}",
-                    "-o", "BatchMode=yes",
-                    "-o", "StrictHostKeyChecking=no",
-                    "-p", str(self.config.port),
-                    f"{self.config.username}@{self.config.host}",
-                    full_command
-                ],
-                input=command,
-                capture_output=True,
-                text=True,
-                timeout=3600  # 1 hour timeout for long ASV runs
-            )
-            output = result.stdout + result.stderr
-            return result.returncode == 0, output
+            if stream_output:
+                # 实时输出模式
+                process = subprocess.Popen(
+                    [
+                        "ssh",
+                        "-o", f"ConnectTimeout={self.config.timeout}",
+                        "-o", "BatchMode=yes",
+                        "-o", "StrictHostKeyChecking=no",
+                        "-p", str(self.config.port),
+                        f"{self.config.username}@{self.config.host}",
+                        full_command
+                    ],
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    bufsize=1
+                )
+                process.stdin.write(command)
+                process.stdin.close()
+
+                output_lines = []
+                for line in process.stdout:
+                    print(line, end='')
+                    output_lines.append(line)
+
+                process.wait()
+                output = ''.join(output_lines)
+                return process.returncode == 0, output
+            else:
+                # 捕获输出模式
+                result = subprocess.run(
+                    [
+                        "ssh",
+                        "-o", f"ConnectTimeout={self.config.timeout}",
+                        "-o", "BatchMode=yes",
+                        "-o", "StrictHostKeyChecking=no",
+                        "-p", str(self.config.port),
+                        f"{self.config.username}@{self.config.host}",
+                        full_command
+                    ],
+                    input=command,
+                    capture_output=True,
+                    text=True,
+                    timeout=3600  # 1 hour timeout for long ASV runs
+                )
+                output = result.stdout + result.stderr
+                return result.returncode == 0, output
         except subprocess.TimeoutExpired:
             return False, "命令执行超时"
         except Exception as e:

@@ -211,15 +211,18 @@ def compare_results(
     machine1 = get_machine_name(asv_dir1)
     machine2 = get_machine_name(asv_dir2)
 
-    if machine1 != machine2:
-        print(f"警告: 机器名称不同: {machine1} vs {machine2}")
-        print(f"使用 server1 的机器名称: {machine1}")
-    machine = machine1
+    # 使用统一的目标机器名称（用于 ASV compare）
+    # 使用一个通用的名称，避免因机器名不同导致问题
+    target_machine = "compare_machine"
+
+    print(f"Server1 机器名称: {machine1}")
+    print(f"Server2 机器名称: {machine2}")
+    print(f"使用统一机器名称: {target_machine}")
 
     # 创建合并的 ASV 目录
     merged_dir = output_dir / "merged_asv"
     merged_results_base = merged_dir / "results"  # results 目录（不含机器名）
-    merged_results_dir = merged_results_base / machine  # results/<machine> 目录
+    merged_results_dir = merged_results_base / target_machine  # results/<machine> 目录
 
     merged_dir.mkdir(parents=True, exist_ok=True)
     merged_results_base.mkdir(parents=True, exist_ok=True)
@@ -235,19 +238,29 @@ def compare_results(
         shutil.copy2(benchmarks2, merged_results_base / "benchmarks.json")
 
     # 复制两个服务器的结果文件到合并目录
-    # 并修改 commit_hash 以区分不同服务器
-    results1_dir = Path(asv_dir1) / "results" / machine
-    results2_dir = Path(asv_dir2) / "results" / machine
+    # 注意：两台服务器可能有不同的机器名称，分别从各自的目录复制
+    results1_dir = Path(asv_dir1) / "results" / machine1
+    results2_dir = Path(asv_dir2) / "results" / machine2
 
     commit1 = None
     commit2 = None
 
-    def copy_and_modify_results(results_dir: Path, server_name: str, original_commit: str) -> str:
+    def copy_and_modify_results(results_dir: Path, server_name: str, original_commit: str, source_machine: str) -> str:
         """复制结果文件并修改 commit hash，返回修改后的 commit hash"""
         modified_commit = None
+
+        if not results_dir.exists():
+            print(f"警告: 结果目录不存在: {results_dir}")
+            return None
+
         for f in results_dir.glob("*.json"):
             if f.name == "machine.json":
-                shutil.copy2(f, merged_results_dir / "machine.json")
+                # 修改 machine.json 中的机器名称为目标名称
+                with open(f, 'r') as rf:
+                    machine_data = json.load(rf)
+                machine_data["machine"] = target_machine
+                with open(merged_results_dir / "machine.json", 'w') as wf:
+                    json.dump(machine_data, wf)
             else:
                 # 构建新文件名：使用新的 commit hash 前缀
                 new_prefix = f"{server_name}-{original_commit[:8]}"
@@ -259,17 +272,21 @@ def compare_results(
                 modified_commit = modify_commit_hash(target_path, server_name)
 
                 if verbose:
-                    print(f"  {server_name}: {f.name} -> {new_filename}")
+                    print(f"  {server_name} ({source_machine}): {f.name} -> {new_filename}")
 
         return modified_commit
 
     # 复制 server1 的结果
     if results1_dir.exists():
-        commit1 = copy_and_modify_results(results1_dir, server1_name, original_commit1)
+        commit1 = copy_and_modify_results(results1_dir, server1_name, original_commit1, machine1)
+    else:
+        print(f"错误: server1 结果目录不存在: {results1_dir}")
 
     # 复制 server2 的结果
     if results2_dir.exists():
-        commit2 = copy_and_modify_results(results2_dir, server2_name, original_commit2)
+        commit2 = copy_and_modify_results(results2_dir, server2_name, original_commit2, machine2)
+    else:
+        print(f"错误: server2 结果目录不存在: {results2_dir}")
 
     if not commit1 or not commit2:
         print("错误: 无法获取 commit hash")
@@ -315,7 +332,7 @@ def compare_results(
     # 构建 asv compare 命令
     cmd = [
         "asv", "compare",
-        "-m", machine,
+        "-m", target_machine,
         "--factor", "1.0",
         "--sort", "default",
     ]

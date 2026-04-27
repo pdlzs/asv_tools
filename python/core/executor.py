@@ -10,7 +10,8 @@ def execute_on_machine(
     machine: MachineConfig,
     script: str,
     dry_run: bool = False,
-    verbose: bool = False
+    verbose: bool = False,
+    stream_output: bool = True
 ) -> bool:
     """
     在指定机器上执行脚本
@@ -20,6 +21,7 @@ def execute_on_machine(
         script: 脚本内容（支持 {work_dir} 占位符）
         dry_run: 是否为干运行模式
         verbose: 是否显示详细输出
+        stream_output: 是否实时输出脚本执行结果（默认 True）
 
     Returns:
         成功返回 True
@@ -35,6 +37,7 @@ def execute_on_machine(
         return True
 
     print(f"在 {machine.name} ({machine.host}) 上执行脚本...")
+    print("-" * 40)
 
     # 创建 SSH 客户端
     config = SSHConfig(
@@ -52,15 +55,13 @@ def execute_on_machine(
         return False
 
     # 执行脚本
-    success, output = client.execute(rendered_script, machine.asv_project_dir)
+    success, output = client.execute(rendered_script, machine.asv_project_dir, stream_output=stream_output)
+
+    print("-" * 40)
 
     if not success:
         print(f"在 {machine.name} 上执行脚本失败")
-        print(output)
         return False
-
-    if verbose:
-        print(output)
 
     print(f"在 {machine.name} 上执行完成")
     return True
