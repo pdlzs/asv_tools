@@ -4,6 +4,7 @@ ASV Benchmark Tools - CLI Entry Point
 
 Usage:
     python main.py cmp <config_file> [options]
+    python main.py ssh-setup <config_file> [options]
 """
 
 import argparse
@@ -29,11 +30,20 @@ def main():
     cmp_parser.add_argument('--output-dir', '-o', help='Output directory')
     cmp_parser.add_argument('--info', '-i', help='Custom info for output filename')
 
+    # ssh-setup 子命令
+    ssh_parser = subparsers.add_parser('ssh-setup', help='Setup SSH passwordless login')
+    ssh_parser.add_argument('config_file', help='Configuration file (YAML)')
+    ssh_parser.add_argument('--key-type', choices=['ed25519', 'rsa'], default='ed25519',
+                           help='SSH key type to generate (default: ed25519)')
+
     args = parser.parse_args()
 
     if args.command == 'cmp':
         from cli.cmp_cmd import run_compare
         sys.exit(run_compare(args))
+    elif args.command == 'ssh-setup':
+        from cli.ssh_setup_cmd import run_ssh_setup
+        sys.exit(run_ssh_setup(args))
     else:
         parser.print_help()
         sys.exit(1)

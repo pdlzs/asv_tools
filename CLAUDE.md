@@ -19,6 +19,13 @@ cd python
 python main.py cmp ../cmp.yaml
 ```
 
+### 配置SSH免密登录
+```bash
+cd python
+python main.py ssh-setup ../cmp.yaml
+```
+一键配置cmp.yaml中所有远程服务器的SSH免密登录。会自动检测或生成SSH密钥，并将公钥复制到远程服务器。
+
 ### 常用选项
 - `--skip-run, -s`: 跳过 ASV 运行，直接使用已有结果对比
 - `--dry-run, -n`: 显示将执行的命令，不实际执行
@@ -36,7 +43,8 @@ python main.py cmp ../cmp_local.yaml --skip-run
 python/
 ├── main.py              # CLI 入口，使用 argparse 子命令
 ├── cli/
-│   └── cmp_cmd.py       # cmp 子命令实现，主执行流程
+│   ├── cmp_cmd.py       # cmp 子命令实现，主执行流程
+│   └── ssh_setup_cmd.py # ssh-setup 子命令，一键配置免密登录
 ├── core/
 │   ├── config.py        # 配置解析 (YAML → dataclass)
 │   ├── executor.py      # 脚本执行器
