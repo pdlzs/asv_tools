@@ -1,0 +1,30 @@
+# ASV Continuous 本地测试配置
+# 使用方法: python main.py cont ../cont_local.yaml --dry-run
+
+machines:
+  server1:
+    host: "local"
+    hostname: "local"
+    username: "luo"
+    asv_project_dir: /mnt/d/code/numpy/benchmarks
+
+commits:
+  base: "HEAD~1"
+  branch: "HEAD"
+
+scripts:
+  server1: |
+    cd /mnt/d/code/numpy/benchmarks
+    rm -rf results
+    rm -rf env
+
+asv_options:
+  bench: "bench_reduce"
+  verbose: true
+
+output:
+  dir: "./cont_results"
+  custom_info: "local_test"
+
+runtime:
+  timeout: 3600

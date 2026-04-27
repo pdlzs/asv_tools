@@ -75,8 +75,8 @@ class SSHClient:
         import sys
         try:
             if stream_output:
-                # 实时输出到终端
-                result = subprocess.run(
+                # 实时输出到终端（使用 Popen 实现真正的实时输出）
+                process = subprocess.Popen(
                     command,
                     shell=True,
                     stdout=subprocess.PIPE,
@@ -85,10 +85,15 @@ class SSHClient:
                     cwd=work_dir,
                     bufsize=1  # 行缓冲
                 )
-                output = result.stdout
-                # 实时打印输出
-                for line in output.splitlines():
-                    print(line)
+
+                output_lines = []
+                for line in process.stdout:
+                    print(line, end='')
+                    output_lines.append(line)
+
+                process.wait()
+                output = ''.join(output_lines)
+                return process.returncode == 0, output
             else:
                 # 捕获输出
                 result = subprocess.run(
@@ -99,7 +104,7 @@ class SSHClient:
                     cwd=work_dir
                 )
                 output = result.stdout + result.stderr
-            return result.returncode == 0, output
+                return result.returncode == 0, output
         except Exception as e:
             return False, str(e)
 

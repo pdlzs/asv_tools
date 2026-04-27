@@ -1,0 +1,68 @@
+# ASV Continuous 配置文件
+# 用于在指定机器上对比两个 commit 的性能
+# 使用方法: python main.py cont cont.yaml
+
+# 示例1: 本地单机执行
+machines:
+  local_machine:
+    host: "local"
+    hostname: "z4"           # 显示名称（可选）
+    username: "luo"
+    asv_project_dir: "/mnt/d/code/numpy/benchmarks"
+
+# 示例2: 多台远程机器执行（取消注释使用）
+# machines:
+#   server1:
+#     host: "zen4.example.com"
+#     port: 22
+#     username: "user"
+#     asv_project_dir: "/home/user/benchmark"
+#
+#   server2:
+#     host: "kunpeng920b.example.com"
+#     port: 22
+#     username: "user"
+#     asv_project_dir: "/home/user/benchmark"
+
+# 要对比的两个 commit（所有机器使用相同 commits）
+commits:
+  base: "HEAD~1"      # 基准 commit（可以是 commit hash、分支名、tag）
+  branch: "HEAD"      # 测试 commit
+
+# 每台机器的执行脚本（可选，用于设置环境）
+scripts:
+  local_machine: |
+    cd {work_dir}
+
+# 示例2 的 scripts（取消注释使用）
+# scripts:
+#   server1: |
+#     source ~/miniconda3/bin/activate myenv
+#     cd {work_dir}
+#
+#   server2: |
+#     source ~/miniconda3/bin/activate myenv
+#     cd {work_dir}
+
+# ASV continuous 选项（可选，不指定则使用官方默认值）
+asv_options:
+  bench: "bench_reduce"       # benchmark 正则表达式
+  factor: 1.1                 # 变化阈值（默认 1.1）
+  machine: "compare_machine"  # 机器名称
+  python: "same"              # Python 版本
+  split: true                 # 分组显示结果 (improved/same/regressed)
+  only_changed: true          # 只显示有变化的 benchmark
+  show_stderr: false          # 显示 stderr 输出
+  quick: false                # 快速运行模式（每个 benchmark 只运行一次）
+  verbose: true               # 详细输出
+
+# 输出配置
+output:
+  dir: "./cont_results"
+  custom_info: "numpy_test"
+
+# 运行时配置
+runtime:
+  ssh_timeout: 30
+  log_level: "INFO"
+  timeout: 3600  # asv continuous 执行超时时间（秒）
