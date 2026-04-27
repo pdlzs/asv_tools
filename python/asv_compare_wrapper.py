@@ -147,13 +147,14 @@ def generate_excel_from_table(table_output: str, output_dir: Path, server1: str,
     print(f"表格已保存到: {excel_output_path}")
 
 
-def modify_commit_hash(json_file: Path, server_name: str) -> str:
+def modify_commit_hash(json_file: Path, server_name: str, target_machine: str) -> str:
     """
-    修改结果文件的 commit_hash，添加服务器前缀
+    修改结果文件的 commit_hash 和 machine 名称
 
     Args:
         json_file: 结果 json 文件路径
-        server_name: 服务器名称
+        server_name: 服务器名称（用于 commit_hash 前缀）
+        target_machine: 目标机器名称（用于 params.machine）
 
     Returns:
         修改后的 commit hash
@@ -168,6 +169,10 @@ def modify_commit_hash(json_file: Path, server_name: str) -> str:
     # 添加服务器前缀（使用 - 分隔符，ASV 显示前8位时更友好）
     modified_commit = f"{server_name}-{original_commit}"
     data["commit_hash"] = modified_commit
+
+    # 修改 params.machine 为目标机器名称
+    if "params" in data and "machine" in data["params"]:
+        data["params"]["machine"] = target_machine
 
     # 写回文件
     with open(json_file, 'w') as f:
@@ -245,8 +250,8 @@ def compare_results(
     commit1 = None
     commit2 = None
 
-    def copy_and_modify_results(results_dir: Path, server_name: str, original_commit: str, source_machine: str) -> str:
-        """复制结果文件并修改 commit hash，返回修改后的 commit hash"""
+    def copy_and_modify_results(results_dir: Path, server_name: str, original_commit: str, source_machine: str, target_machine: str) -> str:
+        """复制结果文件并修改 commit hash 和 machine 名称，返回修改后的 commit hash"""
         modified_commit = None
 
         if not results_dir.exists():
@@ -267,9 +272,9 @@ def compare_results(
                 new_filename = f"{new_prefix}-{f.name.split('-', 1)[1]}" if "-" in f.name else f"{new_prefix}"
                 target_path = merged_results_dir / new_filename
 
-                # 复制并修改 commit_hash
+                # 复制并修改 commit_hash 和 params.machine
                 shutil.copy2(f, target_path)
-                modified_commit = modify_commit_hash(target_path, server_name)
+                modified_commit = modify_commit_hash(target_path, server_name, target_machine)
 
                 if verbose:
                     print(f"  {server_name} ({source_machine}): {f.name} -> {new_filename}")
@@ -278,13 +283,13 @@ def compare_results(
 
     # 复制 server1 的结果
     if results1_dir.exists():
-        commit1 = copy_and_modify_results(results1_dir, server1_name, original_commit1, machine1)
+        commit1 = copy_and_modify_results(results1_dir, server1_name, original_commit1, machine1, target_machine)
     else:
         print(f"错误: server1 结果目录不存在: {results1_dir}")
 
     # 复制 server2 的结果
     if results2_dir.exists():
-        commit2 = copy_and_modify_results(results2_dir, server2_name, original_commit2, machine2)
+        commit2 = copy_and_modify_results(results2_dir, server2_name, original_commit2, machine2, target_machine)
     else:
         print(f"错误: server2 结果目录不存在: {results2_dir}")
 
