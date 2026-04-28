@@ -9,7 +9,36 @@ Usage:
 """
 
 import argparse
+import re
 import sys
+import time
+
+
+def parse_delay(delay_str: str) -> float:
+    """
+    Parse delay string like '10s', '30m', '6h' to seconds.
+
+    Args:
+        delay_str: Delay string with unit (s/m/h)
+
+    Returns:
+        Delay in seconds
+
+    Raises:
+        ValueError: If format is invalid
+    """
+    if not delay_str:
+        return 0.0
+
+    match = re.match(r'^(\d+)(s|m|h)$', delay_str.lower())
+    if not match:
+        raise ValueError(f"Invalid delay format '{delay_str}'. Use format like '10s', '30m', '6h'")
+
+    value = int(match.group(1))
+    unit = match.group(2)
+
+    multipliers = {'s': 1, 'm': 60, 'h': 3600}
+    return value * multipliers[unit]
 
 
 def main():
@@ -17,6 +46,9 @@ def main():
         prog='asv_tools',
         description='ASV Benchmark Tools'
     )
+    parser.add_argument('-d', '--delay', metavar='TIME',
+                       help='Delay before execution (e.g., 10s, 30m, 6h)')
+
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
 
     # cmp 子命令
@@ -46,6 +78,12 @@ def main():
                            help='SSH key type to generate (default: ed25519)')
 
     args = parser.parse_args()
+
+    # 处理延迟执行
+    if args.delay:
+        delay_seconds = parse_delay(args.delay)
+        print(f"Waiting {args.delay} ({delay_seconds}s) before execution...")
+        time.sleep(delay_seconds)
 
     if args.command == 'cmp':
         from cli.cmp_cmd import run_compare

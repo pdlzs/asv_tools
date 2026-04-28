@@ -38,6 +38,7 @@ python main.py ssh-setup ../cmp.yaml
 一键配置cmp.yaml中所有远程服务器的SSH免密登录。会自动检测或生成SSH密钥，并将公钥复制到远程服务器。
 
 ### 常用选项
+- `--delay TIME, -d`: 延时执行，支持 `s`（秒）、`m`（分钟）、`h`（小时），如 `-d 10s`、`-d 30m`、`-d 6h`
 - `--skip-run, -s`: 跳过 ASV 运行，直接使用已有结果对比 (仅 cmp)
 - `--dry-run, -n`: 显示将执行的命令，不实际执行
 - `--verbose, -v`: 详细输出模式
