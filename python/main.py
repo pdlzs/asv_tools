@@ -77,6 +77,16 @@ def main():
     ssh_parser.add_argument('--key-type', choices=['ed25519', 'rsa'], default='ed25519',
                            help='SSH key type to generate (default: ed25519)')
 
+    # collect 子命令
+    collect_parser = subparsers.add_parser('collect', help='Collect performance configuration from machines')
+    collect_parser.add_argument('config_file', help='Configuration file (YAML)')
+    collect_parser.add_argument('--dry-run', '-n', action='store_true',
+                               help='Show commands without executing')
+    collect_parser.add_argument('--verbose', '-v', action='store_true',
+                               help='Verbose output')
+    collect_parser.add_argument('--output-dir', '-o', help='Output directory')
+    collect_parser.add_argument('--info', '-i', help='Custom info for output filename')
+
     args = parser.parse_args()
 
     # 处理延迟执行
@@ -94,6 +104,9 @@ def main():
     elif args.command == 'ssh-setup':
         from cli.ssh_setup_cmd import run_ssh_setup
         sys.exit(run_ssh_setup(args))
+    elif args.command == 'collect':
+        from cli.collect_cmd import run_collect
+        sys.exit(run_collect(args))
     else:
         parser.print_help()
         sys.exit(1)

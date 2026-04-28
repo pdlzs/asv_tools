@@ -4,9 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概述
 
-ASV Benchmark 对比工具，提供两种对比模式：
+ASV Benchmark 对比工具，提供三种模式：
 1. **跨机器对比 (cmp)**: 在多台服务器上执行 ASV benchmark 并对比结果，使用 `asv compare` 命令
 2. **Commit 对比 (cont)**: 在指定机器上对比两个 commit 的性能，使用 `asv continuous` 命令。支持单机或多机执行
+3. **性能配置采集 (collect)**: 采集各机器的性能相关配置（CPU、内存、BIOS、环境等）并对比差异
 
 输出 TXT 和 Excel 格式报告。
 
@@ -37,6 +38,24 @@ python main.py ssh-setup ../cmp.yaml
 ```
 一键配置cmp.yaml中所有远程服务器的SSH免密登录。会自动检测或生成SSH密钥，并将公钥复制到远程服务器。
 
+### 性能配置采集 (collect)
+```bash
+cd python
+python main.py collect ../collect.yaml
+```
+采集各机器的性能相关配置（CPU、内存、BIOS、内核参数、conda 环境等），输出 YAML 配置文件和 Markdown 对比报告。
+
+**采集内容**：
+- BIOS 配置（dmidecode 全量输出）
+- CPU 信息（型号、核心数、缓存、指令集、NUMA）
+- 内存配置（总内存、大页、透明大页）
+- 内核参数（swappiness、dirty_ratio、shmmax 等）
+- 环境配置（Python、GCC、BLAS、LAPACK 版本）
+- 性能相关环境变量（OMP_NUM_THREADS、MKL_NUM_THREADS 等）
+- 系统限制（ulimit）
+
+**容错设计**：单项采集失败不影响其他项，失败项记录为 NA。
+
 ### 常用选项
 - `--delay TIME, -d`: 延时执行，支持 `s`（秒）、`m`（分钟）、`h`（小时），如 `-d 10s`、`-d 30m`、`-d 6h`
 - `--skip-run, -s`: 跳过 ASV 运行，直接使用已有结果对比 (仅 cmp)
@@ -58,10 +77,14 @@ python/
 ├── cli/
 │   ├── cmp_cmd.py       # cmp 子命令实现，跨机器对比
 │   ├── cont_cmd.py      # cont 子命令实现，单机 commit 对比
+│   ├── collect_cmd.py   # collect 子命令实现，性能配置采集
 │   └── ssh_setup_cmd.py # ssh-setup 子命令，一键配置免密登录
 ├── core/
 │   ├── config.py        # cmp 配置解析 (YAML → dataclass)
 │   ├── cont_config.py   # cont 配置解析
+│   ├── collect_config.py# collect 配置解析
+│   ├── perf_collector.py# 性能配置采集器
+│   ├── perf_comparator.py# 性能配置对比器
 │   ├── executor.py      # 脚本执行器
 │   └── downloader.py    # 结果下载器
 ├── ssh_utils.py         # SSH 工具 (subprocess 调用 ssh/scp)
@@ -80,6 +103,12 @@ python/
 **cont 命令**:
 1. `main.py` 解析 CLI 参数，调用 cont 子命令
 2. `cont_cmd.py` 加载配置 → 验证 → 测试连接 → 执行脚本 → 调用 `asv continuous base branch`
+
+**collect 命令**:
+1. `main.py` 解析 CLI 参数，调用 collect 子命令
+2. `collect_cmd.py` 加载配置 → 验证 → 测试连接 → 采集配置 → 保存 YAML → 生成对比报告
+3. `perf_collector.py` 通过 SSH 执行采集脚本，解析输出
+4. `perf_comparator.py` 对比多个配置，生成 Markdown 报告
 
 ### 关键设计
 
@@ -111,3 +140,9 @@ python/
 - `scripts`: 每台机器的执行脚本，支持 `{work_dir}` 占位符
 - `asv_options`: ASV 选项（可选，不指定使用官方默认值）
 - `output.dir`: 输出目录
+
+**collect 配置** (`collect.yaml`):
+- `machines`: 服务器配置（1台或多台），支持 `host: "local"` 本地执行
+- `scripts`: 每台机器的环境初始化脚本（如激活 conda、设置环境变量）
+- `output.dir`: 输出目录，默认 `./perf_results`
+- `output.custom_info`: 自定义标识，用于输出文件名

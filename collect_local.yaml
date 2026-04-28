@@ -1,0 +1,15 @@
+# 性能配置采集示例配置文件
+# 本地测试版本
+
+machines:
+  local_machine:
+    host: "local"
+
+scripts:
+  local_machine: |
+    # 本地环境初始化（可选）
+    # source ~/miniconda3/bin/activate myenv
+
+output:
+  dir: "./collect_results"
+  custom_info: "local_test"

@@ -1,0 +1,28 @@
+# 性能配置采集示例配置文件
+# 用于跨机器性能配置对比
+
+machines:
+  server1:
+    host: "zen4.example.com"
+    port: 22
+    username: "user"
+
+  server2:
+    host: "kunpeng950.example.com"
+    port: 22
+    username: "user"
+
+scripts:
+  server1: |
+    # AMD Zen4 服务器环境初始化
+    source ~/miniconda3/bin/activate numpy_bench
+    export OMP_NUM_THREADS=192
+
+  server2: |
+    # 鲲鹏 950 服务器环境初始化
+    source /opt/conda/bin/activate numpy_bench
+    export OMP_NUM_THREADS=64
+
+output:
+  dir: "./collect_results"
+  custom_info: "zen4_vs_kp950"
