@@ -22,6 +22,7 @@ class PerfConfig:
     """性能配置数据结构"""
     machine_name: str                  # 配置文件中的 name
     display_name: str                  # 显示名称（hostname 或 name）
+    host: str                           # 主机地址（"local" 或远程地址）
     machine: Dict[str, Any]
     bios: Dict[str, Any]               # 解析后的 BIOS 信息（包含原始输出和解析字段）
     cpu: Dict[str, Any]
@@ -171,6 +172,7 @@ echo '=== COLLECT_DONE ==='
         return PerfConfig(
             machine_name=self.machine.name,
             display_name=self.machine.display_name,
+            host=self.machine.host,
             machine=self._parse_machine_info(sections.get('MACHINE_INFO', 'NA')),
             bios=bios_info,
             cpu=self._parse_cpu_info(sections.get('CPU_INFO', 'NA')),
@@ -764,6 +766,7 @@ echo '=== COLLECT_DONE ==='
         return PerfConfig(
             machine_name=self.machine.name,
             display_name=self.machine.display_name,
+            host=self.machine.host,
             machine={'error': error_msg},
             bios={'processor': {'error': error_msg}, 'memory': {'error': error_msg}, 'system': {'error': error_msg}},
             cpu={'error': error_msg},
@@ -788,6 +791,7 @@ def perf_config_to_yaml(config: PerfConfig) -> str:
         '采集时间': config.collect_time,
         '主机标识': config.machine_name,
         '显示名称': config.display_name,
+        '主机地址': config.host,
         'machine': config.machine,
         'bios': config.bios,
         'cpu': config.cpu,

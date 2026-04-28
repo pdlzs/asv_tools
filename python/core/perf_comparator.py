@@ -154,11 +154,11 @@ class PerfComparator:
 
         compare_fields = [
             ('架构', 'cpu.architecture'),
-            ('型号', 'cpu.model'),
+            ('型号', None),  # 特殊处理：优先使用 dmidecode 型号
             ('物理核心', 'cpu.physical_cores'),
             ('逻辑核心', 'cpu.logical_cores'),
             ('线程/核心', 'cpu.threads_per_core'),
-            ('当前频率', 'cpu.current_mhz'),
+            ('当前频率', None),  # 特殊处理：使用 dmidecode current_speed
             ('最大频率', 'cpu.max_mhz'),
             ('L1d 缓存', 'cpu.l1d_cache'),
             ('L2 缓存', 'cpu.l2_cache'),
@@ -168,13 +168,47 @@ class PerfComparator:
         ]
 
         for label, path in compare_fields:
-            values = [self._get_value(cfg, path) for cfg in self.configs]
+            if label == '型号':
+                values = [self._get_cpu_model_from_dmidecode(cfg) for cfg in self.configs]
+            elif label == '当前频率':
+                values = [self._get_current_freq_from_dmidecode(cfg) for cfg in self.configs]
+            else:
+                values = [self._get_value(cfg, path) for cfg in self.configs]
             diff = self._compare_values([self._format_value_for_display(v) for v in values])
-            # 使用格式化方法处理显示
             display_values = [self._format_value_for_display(v) for v in values]
             rows.append([label] + display_values + [diff])
 
         return self._format_table(rows)
+
+    def _get_cpu_model_from_dmidecode(self, config: PerfConfig) -> str:
+        """从 dmidecode 获取 CPU 型号，备用 lscpu"""
+        bios = config.bios
+        if isinstance(bios, dict) and 'processor' in bios:
+            proc_info = bios['processor']
+            if isinstance(proc_info, dict):
+                dmidecode_model = proc_info.get('version', '')
+                if dmidecode_model and dmidecode_model != 'NA':
+                    return dmidecode_model.strip()
+        # 备用：从 lscpu 获取
+        lscpu_model = self._get_value(config, 'cpu.model')
+        if lscpu_model and lscpu_model != 'NA' and lscpu_model != '-':
+            return lscpu_model
+        return 'NA'
+
+    def _get_current_freq_from_dmidecode(self, config: PerfConfig) -> str:
+        """从 dmidecode 获取当前频率，备用 lscpu"""
+        bios = config.bios
+        if isinstance(bios, dict) and 'processor' in bios:
+            proc_info = bios['processor']
+            if isinstance(proc_info, dict):
+                dmidecode_freq = proc_info.get('current_speed', '')
+                if dmidecode_freq and dmidecode_freq != 'NA':
+                    return dmidecode_freq
+        # 备用：从 lscpu 获取
+        lscpu_freq = self._get_value(config, 'cpu.current_mhz')
+        if lscpu_freq and lscpu_freq != 'NA':
+            return f"{lscpu_freq} MHz"
+        return 'NA'
 
     def _compare_memory(self) -> str:
         """对比内存信息"""
@@ -627,41 +661,48 @@ class PerfComparator:
         lines.append("### 主要差异点")
         lines.append("")
 
+        # 使用动态编号
+        item_num = 1
+
         # 分析 CPU 架构差异
         architectures = [self._get_value(cfg, 'cpu.architecture') for cfg in self.configs]
         if len(set(architectures)) > 1:
-            lines.append(f"1. **架构差异**: {', '.join(architectures)}")
+            lines.append(f"{item_num}. **架构差异**: {', '.join(architectures)}")
             lines.append("   - 不同架构的指令集和优化策略不同")
             lines.append("   - x86_64 通常使用 AVX/AVX2/AVX-512，ARM64 使用 NEON/SVE")
             lines.append("")
+            item_num += 1
 
         # 分析 BLAS 库差异
         blas_versions = [self._get_value(cfg, 'environment.blas') for cfg in self.configs]
         if len(set([v for v in blas_versions if v != 'NA'])) > 1:
-            lines.append("2. **BLAS 库差异**:")
+            lines.append(f"{item_num}. **BLAS 库差异**:")
             for i, (cfg, blas) in enumerate(zip(self.configs, blas_versions)):
                 lines.append(f"   - {cfg.display_name}: {blas}")
             lines.append("   - MKL 在 Intel CPU 上通常有 20-40% 矩阵运算优势")
             lines.append("   - OpenBLAS 是跨平台开源选择，ARM 平台常用")
             lines.append("")
+            item_num += 1
 
         # 分析核心数差异
         cores = [self._get_value(cfg, 'cpu.physical_cores') for cfg in self.configs]
         valid_cores = [int(c) for c in cores if c != 'NA' and c.isdigit()]
         if len(valid_cores) >= 2 and valid_cores[0] != valid_cores[1]:
             diff = valid_cores[1] - valid_cores[0]
-            lines.append(f"3. **核心数差异**: {valid_cores[0]} vs {valid_cores[1]} ({'+' if diff > 0 else ''}{diff})")
+            lines.append(f"{item_num}. **核心数差异**: {valid_cores[0]} vs {valid_cores[1]} ({'+' if diff > 0 else ''}{diff})")
             lines.append("   - 核心数直接影响并行计算能力")
             lines.append("")
+            item_num += 1
 
         # 分析 NUMA 配置
         numa_nodes = [self._get_value(cfg, 'cpu.numa_nodes') for cfg in self.configs]
         if len(set([v for v in numa_nodes if v != 'NA'])) > 1:
-            lines.append("4. **NUMA 配置差异**:")
+            lines.append(f"{item_num}. **NUMA 配置差异**:")
             for cfg, numa in zip(self.configs, numa_nodes):
                 lines.append(f"   - {cfg.display_name}: {numa} 个节点")
             lines.append("   - 多 NUMA 节点需注意内存绑定优化，避免跨节点访问")
             lines.append("")
+            item_num += 1
 
         # 分析环境变量
         thread_vars = []
@@ -674,13 +715,14 @@ class PerfComparator:
         if len(thread_vars) > 1:
             omp_values = [t[1] for t in thread_vars]
             if len(set([v for v in omp_values if v != '-'])) > 1:
-                lines.append("5. **线程数配置差异**:")
+                lines.append(f"{item_num}. **线程数配置差异**:")
                 for name, omp, mkl in thread_vars:
                     lines.append(f"   - {name}: OMP={omp}, MKL={mkl}")
                 lines.append("   - 线程数应与物理核心数匹配以获得最佳性能")
                 lines.append("")
+                item_num += 1
 
-        if not lines:
+        if item_num == 1:
             lines.append("各机器配置基本一致，无明显性能差异因素。")
 
         return '\n'.join(lines)
