@@ -57,11 +57,13 @@ dmidecode -t system 2>&1 || echo 'NA: 需要 root 权限运行 dmidecode'
 
 echo '=== CPU_INFO ==='
 lscpu 2>&1 || echo 'NA: lscpu 不可用'
+# ARM架构的指令集在 /proc/cpuinfo 的 Features 字段
+cat /proc/cpuinfo 2>/dev/null | grep -E '^(model name|Model|Features|flags)' | head -5 || echo 'NA: /proc/cpuinfo 不可用'
 
 echo '=== MEMORY_INFO ==='
 free -h 2>&1 || echo 'NA: free 不可用'
 cat /sys/kernel/mm/transparent_hugepage/enabled 2>&1 || echo 'NA: 透明大页配置不可用'
-cat /proc/meminfo 2>&1 | grep -E 'HugePages|Hugepagesize' || echo 'NA: 大页配置不可用'
+cat /proc/meminfo 2>&1 | grep -i huge || echo 'NA: 大页配置不可用'
 numactl --hardware 2>&1 || echo 'NA: numactl 不可用或无 NUMA 配置'
 
 echo '=== PYTHON_VERSION ==='
@@ -228,15 +230,10 @@ echo '=== COLLECT_DONE ==='
             'system': {'raw': system_raw},
         }
 
-        # 解析 Processor Information
+        # 解析 Processor Information（扩展字段）
         if processor_raw and not processor_raw.startswith('NA:'):
-            bios_info['processor'].update(self._parse_dmidecode_section(
-                processor_raw,
-                ['Socket Designation', 'Type', 'Family', 'Manufacturer', 'Version',
-                 'Voltage', 'External Clock', 'Max Speed', 'Current Speed',
-                 'Status', 'Upgrade', 'L1 Cache Handle', 'L2 Cache Handle', 'L3 Cache Handle',
-                 'Core Count', 'Core Enabled', 'Thread Count']
-            ))
+            processor_info = self._parse_dmidecode_processor(processor_raw)
+            bios_info['processor'].update(processor_info)
 
         # 解析 Memory Device
         if memory_raw and not memory_raw.startswith('NA:'):
@@ -252,6 +249,112 @@ echo '=== COLLECT_DONE ==='
             ))
 
         return bios_info
+
+    def _parse_dmidecode_processor(self, raw: str) -> Dict[str, Any]:
+        """
+        解析 dmidecode CPU 处理器信息
+
+        提取 Handle、DMI type、以及所有关键字段
+        """
+        result = {'raw': raw}
+        lines = raw.split('\n')
+
+        current_handle = None
+        current_type = None
+        in_processor = False
+        flags = []
+
+        for line in lines:
+            line = line.rstrip()
+
+            # Handle 行: Handle 0x0027, DMI type 4, 48 bytes
+            if line.startswith('Handle '):
+                # 解析 Handle 信息
+                handle_match = re.match(r'Handle\s+(0x[0-9A-Fa-f]+)', line)
+                if handle_match:
+                    result['handle'] = handle_match.group(1)
+                # 解析 DMI type
+                type_match = re.search(r'DMI type\s+(\d+)', line)
+                if type_match:
+                    result['dmi_type'] = type_match.group(1)
+                # 解析大小
+                size_match = re.search(r'(\d+)\s+bytes', line)
+                if size_match:
+                    result['size_bytes'] = size_match.group(1)
+                continue
+
+            # 类型行: Processor Information
+            if not line.startswith(' ') and not line.startswith('\t') and line.strip() and ':' not in line:
+                if line.strip() == 'Processor Information':
+                    in_processor = True
+                current_type = line.strip()
+                continue
+
+            # 字段行
+            if in_processor and (line.startswith('    ') or line.startswith('\t')):
+                stripped = line.strip()
+                if ':' in stripped:
+                    parts = stripped.split(':', 1)
+                    key = parts[0].strip()
+                    value = parts[1].strip() if len(parts) > 1 else ''
+
+                    # 映射关键字段
+                    field_mapping = {
+                        'Socket Designation': 'socket',
+                        'Type': 'type',
+                        'Family': 'family',
+                        'Manufacturer': 'manufacturer',
+                        'ID': 'id',
+                        'Signature': 'signature',
+                        'Version': 'version',
+                        'Voltage': 'voltage',
+                        'External Clock': 'external_clock',
+                        'Max Speed': 'max_speed',
+                        'Current Speed': 'current_speed',
+                        'Status': 'status',
+                        'Upgrade': 'upgrade',
+                        'L1 Cache Handle': 'l1_cache_handle',
+                        'L2 Cache Handle': 'l2_cache_handle',
+                        'L3 Cache Handle': 'l3_cache_handle',
+                        'Core Count': 'core_count',
+                        'Core Enabled': 'core_enabled',
+                        'Thread Count': 'thread_count',
+                        'Flags': 'flags_raw',
+                    }
+
+                    if key in field_mapping:
+                        result[field_mapping[key]] = value
+
+                    # 特殊处理 Flags（多行列表）
+                    if key == 'Flags':
+                        flags = [value]
+                        # 继续读取后续的标志行（缩进更深的行）
+                        continue
+
+                # 如果是 Flags 后续行（更深层缩进，如 8 个空格）
+                elif flags and (line.startswith('        ') or line.count(' ') > 6):
+                    # 这是 Flag 的后续值
+                    flag_val = line.strip()
+                    if flag_val and not flag_val.startswith(':'):
+                        flags.append(flag_val)
+
+            # 如果遇到新的类型行，结束当前处理器信息
+            if not line.startswith(' ') and not line.startswith('\t') and line.strip() and ':' not in line and in_processor:
+                in_processor = False
+
+        # 保存解析后的 Flags
+        if flags:
+            result['flags'] = ', '.join(flags)
+            result['flags_list'] = flags
+            # 提取关键指令集
+            key_flags = []
+            flag_str = ' '.join(flags).lower()
+            for f in ['avx512', 'avx2', 'avx', 'fma', 'sse4_2', 'sse4_1', 'sse2', 'sse', 'neon', 'sve']:
+                if f in flag_str:
+                    key_flags.append(f.upper().replace('_', '-'))
+            result['key_instruction_sets'] = key_flags
+
+        return result
 
     def _parse_dmidecode_section(self, raw: str, target_fields: List[str]) -> Dict[str, Any]:
         """
@@ -302,16 +405,23 @@ echo '=== COLLECT_DONE ==='
         """
         解析 dmidecode 内存信息
 
-        提取 Physical Memory Array 和 Memory Device 信息
+        提取 Physical Memory Array、Memory Device 信息以及 SMBIOS 版本
         """
         result = {}
         lines = raw.split('\n')
 
         current_type = None
         physical_array = {}
+        smbios_version = None
 
         for line in lines:
             line = line.rstrip()
+
+            # SMBIOS 版本: "# SMBIOS 3.5.0 present" 或 "SMBIOS 3.5.0 present"
+            if 'SMBIOS' in line and 'present' in line:
+                match = re.search(r'SMBIOS\s+(\d+\.\d+\.\d+)', line)
+                if match:
+                    smbios_version = match.group(1)
 
             # 类型行
             if not line.startswith(' ') and not line.startswith('\t') and line.strip() and ':' not in line:
@@ -327,18 +437,68 @@ echo '=== COLLECT_DONE ==='
                     value = parts[1].strip() if len(parts) > 1 else ''
 
                     if current_type == 'Physical Memory Array':
-                        physical_array[key] = value
+                        if key == 'Maximum Capacity':
+                            physical_array['max_capacity'] = value
+                        elif key == 'Number Of Devices':
+                            physical_array['num_devices'] = value
+                        elif key == 'Error Correction Type':
+                            physical_array['ecc_type'] = value
 
-        # 提取关键信息
-        if 'Maximum Capacity' in physical_array:
-            result['max_capacity'] = physical_array['Maximum Capacity']
-        if 'Number Of Devices' in physical_array:
-            result['num_devices'] = physical_array['Number Of Devices']
-        if 'Error Correction Type' in physical_array:
-            result['ecc_type'] = physical_array['Error Correction Type']
+        # SMBIOS 版本
+        if smbios_version:
+            result['smbios_version'] = smbios_version
+
+        # Physical Memory Array 信息
+        result['max_capacity'] = physical_array.get('max_capacity', 'NA')
+        result['num_devices'] = physical_array.get('num_devices', 'NA')
+        result['ecc_type'] = physical_array.get('ecc_type', 'NA')
 
         # 解析所有内存设备
         result['devices'] = self._extract_memory_devices(raw)
+
+        # 统计内存设备共性（用于对比）
+        if result['devices']:
+            # 找出最常见的配置
+            common_size = None
+            common_speed = None
+            common_type = None
+            common_part_number = None
+
+            size_counts = {}
+            speed_counts = {}
+            type_counts = {}
+            part_counts = {}
+
+            for dev in result['devices']:
+                if isinstance(dev, dict):
+                    size = dev.get('Size', 'Unknown')
+                    speed = dev.get('Speed', 'Unknown')
+                    mem_type = dev.get('Type', 'Unknown')
+                    part = dev.get('Part Number', 'Unknown')
+
+                    size_counts[size] = size_counts.get(size, 0) + 1
+                    speed_counts[speed] = speed_counts.get(speed, 0) + 1
+                    type_counts[mem_type] = type_counts.get(mem_type, 0) + 1
+                    if part and part != 'Unknown' and not part.startswith('No'):
+                        part_counts[part] = part_counts.get(part, 0) + 1
+
+            # 取最常见的值作为代表
+            if size_counts:
+                common_size = max(size_counts.items(), key=lambda x: x[1])[0]
+            if speed_counts:
+                common_speed = max(speed_counts.items(), key=lambda x: x[1])[0]
+            if type_counts:
+                common_type = max(type_counts.items(), key=lambda x: x[1])[0]
+            if part_counts:
+                common_part_number = max(part_counts.items(), key=lambda x: x[1])[0]
+
+            result['common_size'] = common_size or 'NA'
+            result['common_speed'] = common_speed or 'NA'
+            result['common_type'] = common_type or 'NA'
+            result['common_part_number'] = common_part_number or 'NA'
+            result['size_distribution'] = size_counts
+            result['speed_distribution'] = speed_counts
+            result['type_distribution'] = type_counts
 
         return result
 
@@ -428,14 +588,61 @@ echo '=== COLLECT_DONE ==='
             except ValueError:
                 pass
 
-        # 解析关键指令集
+        # 解析关键指令集（x86 和 ARM 分别处理）
         if 'flags' in info:
+            # x86_64: lscpu Flags 或 /proc/cpuinfo flags
             flags = info['flags']
             key_flags = []
-            for f in ['avx512', 'avx2', 'avx', 'fma', 'sse4', 'sse2', 'sse']:
+            for f in ['avx512', 'avx2', 'avx', 'fma', 'sse4_2', 'sse4_1', 'sse2', 'sse']:
                 if f in flags.lower():
                     key_flags.append(f.upper().replace('_', '-'))
             info['key_instruction_sets'] = key_flags
+        elif 'features' in info:
+            # ARM64: /proc/cpuinfo Features
+            features = info['features']
+            key_flags = []
+            arm_features_map = {
+                'neon': 'NEON',
+                'asimd': 'ASIMD',  # Advanced SIMD (NEON的扩展)
+                'sve': 'SVE',      # Scalable Vector Extension
+                'sve2': 'SVE2',
+                'fp': 'FP',
+                'aes': 'AES',
+                'pmull': 'PMULL',
+                'sha1': 'SHA1',
+                'sha2': 'SHA2',
+                'crc32': 'CRC32',
+                'atomics': 'ATOMICS',
+                'fphp': 'FPHP',
+                'asimdhp': 'ASIMDHP',
+                'asimddp': 'ASIMDDP',
+            }
+            for feat, name in arm_features_map.items():
+                if feat in features.lower():
+                    key_flags.append(name)
+            info['key_instruction_sets'] = key_flags
+        else:
+            # 尝试从原始输出中解析 Features（ARM）
+            for line in raw.split('\n'):
+                if line.startswith('Features'):
+                    features = line.split(':', 1)[1].strip() if ':' in line else ''
+                    key_flags = []
+                    arm_features_map = {
+                        'neon': 'NEON',
+                        'asimd': 'ASIMD',
+                        'sve': 'SVE',
+                        'sve2': 'SVE2',
+                        'fp': 'FP',
+                        'aes': 'AES',
+                        'sha1': 'SHA1',
+                        'sha2': 'SHA2',
+                    }
+                    for feat, name in arm_features_map.items():
+                        if feat in features.lower():
+                            key_flags.append(name)
+                    info['key_instruction_sets'] = key_flags
+                    info['features'] = features
+                    break
 
         return info
 
@@ -447,16 +654,30 @@ echo '=== COLLECT_DONE ==='
 
         lines = raw.split('\n')
         for line in lines:
+            # 解析 free 输出
             if line.startswith('Mem:'):
                 parts = line.split()
                 if len(parts) >= 2:
                     info['total'] = parts[1]
-            elif 'HugePages_Total:' in line:
-                info['hugepages_total'] = line.split(':')[1].strip()
-            elif 'Hugepagesize:' in line:
-                info['hugepage_size'] = line.split(':')[1].strip()
-            elif line.startswith('[always') or line.startswith('[madvise') or line.startswith('[never'):
-                # 透明大页配置，[always] 表示当前值
+            # 解析大页配置（HugePages_Total、HugePages_Free、Hugepagesize）
+            elif ':' in line:
+                # 格式: HugePages_Total:       0 或 Hugepagesize:       2048 kB
+                parts = line.split(':')
+                if len(parts) >= 2:
+                    key = parts[0].strip()
+                    value = parts[1].strip()
+                    if key == 'HugePages_Total':
+                        info['hugepages_total'] = value
+                    elif key == 'HugePages_Free':
+                        info['hugepages_free'] = value
+                    elif key == 'Hugepagesize':
+                        info['hugepage_size'] = value
+            # 透明大页配置
+            elif '[' in line and ('always' in line or 'madvise' in line or 'never' in line):
+                # 格式: always [madvise] never
+                match = re.search(r'\[(\w+)\]', line)
+                if match:
+                    info['transparent_hugepage'] = match.group(1)
                 match = re.search(r'\[(\w+)\]', line)
                 if match:
                     info['transparent_hugepage'] = match.group(1)
