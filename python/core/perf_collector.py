@@ -457,7 +457,16 @@ echo '=== COLLECT_DONE ==='
         result['devices'] = self._extract_memory_devices(raw)
 
         # 统计内存设备共性（用于对比）
-        if result['devices']:
+        # 只统计有效安装的内存设备，过滤掉 "No Module Installed" 的空槽位
+        valid_devices = []
+        for dev in result['devices']:
+            if isinstance(dev, dict):
+                size = dev.get('Size', 'Unknown')
+                # 过滤掉未安装的内存槽位
+                if size and not ('No Module' in size or 'No_Device' in size or size.strip() == '' or size == 'Unknown'):
+                    valid_devices.append(dev)
+
+        if valid_devices:
             # 找出最常见的配置
             common_size = None
             common_speed = None
@@ -469,18 +478,17 @@ echo '=== COLLECT_DONE ==='
             type_counts = {}
             part_counts = {}
 
-            for dev in result['devices']:
-                if isinstance(dev, dict):
-                    size = dev.get('Size', 'Unknown')
-                    speed = dev.get('Speed', 'Unknown')
-                    mem_type = dev.get('Type', 'Unknown')
-                    part = dev.get('Part Number', 'Unknown')
+            for dev in valid_devices:
+                size = dev.get('Size', 'Unknown')
+                speed = dev.get('Speed', 'Unknown')
+                mem_type = dev.get('Type', 'Unknown')
+                part = dev.get('Part Number', 'Unknown')
 
-                    size_counts[size] = size_counts.get(size, 0) + 1
-                    speed_counts[speed] = speed_counts.get(speed, 0) + 1
-                    type_counts[mem_type] = type_counts.get(mem_type, 0) + 1
-                    if part and part != 'Unknown' and not part.startswith('No'):
-                        part_counts[part] = part_counts.get(part, 0) + 1
+                size_counts[size] = size_counts.get(size, 0) + 1
+                speed_counts[speed] = speed_counts.get(speed, 0) + 1
+                type_counts[mem_type] = type_counts.get(mem_type, 0) + 1
+                if part and part != 'Unknown' and not part.startswith('No'):
+                    part_counts[part] = part_counts.get(part, 0) + 1
 
             # 取最常见的值作为代表
             if size_counts:
@@ -499,6 +507,17 @@ echo '=== COLLECT_DONE ==='
             result['size_distribution'] = size_counts
             result['speed_distribution'] = speed_counts
             result['type_distribution'] = type_counts
+            result['valid_device_count'] = len(valid_devices)
+        else:
+            # 没有有效内存设备
+            result['common_size'] = 'NA'
+            result['common_speed'] = 'NA'
+            result['common_type'] = 'NA'
+            result['common_part_number'] = 'NA'
+            result['size_distribution'] = {}
+            result['speed_distribution'] = {}
+            result['type_distribution'] = {}
+            result['valid_device_count'] = 0
 
         return result
 
@@ -588,61 +607,50 @@ echo '=== COLLECT_DONE ==='
             except ValueError:
                 pass
 
-        # 解析关键指令集（x86 和 ARM 分别处理）
-        if 'flags' in info:
-            # x86_64: lscpu Flags 或 /proc/cpuinfo flags
+        # 解析关键指令集
+        # 优先从 lscpu Flags 解析（x86）
+        if 'flags' in info and info['flags']:
             flags = info['flags']
             key_flags = []
             for f in ['avx512', 'avx2', 'avx', 'fma', 'sse4_2', 'sse4_1', 'sse2', 'sse']:
                 if f in flags.lower():
                     key_flags.append(f.upper().replace('_', '-'))
             info['key_instruction_sets'] = key_flags
-        elif 'features' in info:
-            # ARM64: /proc/cpuinfo Features
-            features = info['features']
-            key_flags = []
-            arm_features_map = {
-                'neon': 'NEON',
-                'asimd': 'ASIMD',  # Advanced SIMD (NEON的扩展)
-                'sve': 'SVE',      # Scalable Vector Extension
-                'sve2': 'SVE2',
-                'fp': 'FP',
-                'aes': 'AES',
-                'pmull': 'PMULL',
-                'sha1': 'SHA1',
-                'sha2': 'SHA2',
-                'crc32': 'CRC32',
-                'atomics': 'ATOMICS',
-                'fphp': 'FPHP',
-                'asimdhp': 'ASIMDHP',
-                'asimddp': 'ASIMDDP',
-            }
-            for feat, name in arm_features_map.items():
-                if feat in features.lower():
-                    key_flags.append(name)
-            info['key_instruction_sets'] = key_flags
-        else:
-            # 尝试从原始输出中解析 Features（ARM）
-            for line in raw.split('\n'):
-                if line.startswith('Features'):
-                    features = line.split(':', 1)[1].strip() if ':' in line else ''
+
+        # 从原始输出中解析 Features（ARM）
+        # lscpu 可能没有 Features，需要从 /proc/cpuinfo 输出中提取
+        for line in raw.split('\n'):
+            # ARM64: Features 行
+            if line.startswith('Features'):
+                features = line.split(':', 1)[1].strip() if ':' in line else ''
+                if features:
                     key_flags = []
                     arm_features_map = {
                         'neon': 'NEON',
-                        'asimd': 'ASIMD',
-                        'sve': 'SVE',
+                        'asimd': 'ASIMD',  # Advanced SIMD (NEON的扩展)
+                        'sve': 'SVE',      # Scalable Vector Extension
                         'sve2': 'SVE2',
                         'fp': 'FP',
                         'aes': 'AES',
                         'sha1': 'SHA1',
                         'sha2': 'SHA2',
+                        'crc32': 'CRC32',
+                        'atomics': 'ATOMICS',
                     }
                     for feat, name in arm_features_map.items():
                         if feat in features.lower():
                             key_flags.append(name)
-                    info['key_instruction_sets'] = key_flags
+                    # 如果已经有 lscpu 解析的 key_instruction_sets，合并；否则设置
+                    if 'key_instruction_sets' in info:
+                        info['key_instruction_sets'].extend(key_flags)
+                    else:
+                        info['key_instruction_sets'] = key_flags
                     info['features'] = features
                     break
+
+        # 确保 key_instruction_sets 存在
+        if 'key_instruction_sets' not in info:
+            info['key_instruction_sets'] = []
 
         return info
 
@@ -655,8 +663,10 @@ echo '=== COLLECT_DONE ==='
         lines = raw.split('\n')
         for line in lines:
             # 解析 free 输出
-            if line.startswith('Mem:'):
+            # 格式: "Mem:           754Gi       ...  " 或 "Mem:            123Gi        ..."
+            if line.strip().startswith('Mem:'):
                 parts = line.split()
+                # parts[0] = "Mem:", parts[1] = total
                 if len(parts) >= 2:
                     info['total'] = parts[1]
             # 解析大页配置（HugePages_Total、HugePages_Free、Hugepagesize）
@@ -675,9 +685,6 @@ echo '=== COLLECT_DONE ==='
             # 透明大页配置
             elif '[' in line and ('always' in line or 'madvise' in line or 'never' in line):
                 # 格式: always [madvise] never
-                match = re.search(r'\[(\w+)\]', line)
-                if match:
-                    info['transparent_hugepage'] = match.group(1)
                 match = re.search(r'\[(\w+)\]', line)
                 if match:
                     info['transparent_hugepage'] = match.group(1)

@@ -108,7 +108,7 @@ class PerfComparator:
 
         return '⚠️ 不同'
 
-    def _get_value(self, config: PerfConfig, path: str) -> str:
+    def _get_value(self, config: PerfConfig, path: str) -> Any:
         """从配置中获取指定路径的值"""
         parts = path.split('.')
         obj = config
@@ -131,8 +131,21 @@ class PerfComparator:
 
         if val is None:
             return 'NA'
+        # 保持列表类型不变，用于后续显示处理
+        if isinstance(val, list):
+            return val
         if isinstance(val, dict):
             return str(val.get('raw', 'NA'))[:50] + '...' if val.get('raw') else 'NA'
+        return str(val)
+
+    def _format_value_for_display(self, val: Any) -> str:
+        """将值格式化为表格显示格式"""
+        if isinstance(val, list):
+            if len(val) == 0:
+                return 'NA'
+            return ', '.join(val[:5]) + ('...' if len(val) > 5 else '')
+        elif val == 'NA' or (isinstance(val, str) and val.startswith('NA:')):
+            return 'NA'
         return str(val)
 
     def _compare_cpu(self) -> str:
@@ -156,14 +169,9 @@ class PerfComparator:
 
         for label, path in compare_fields:
             values = [self._get_value(cfg, path) for cfg in self.configs]
-            diff = self._compare_values(values)
-            # 处理列表类型的显示
-            display_values = []
-            for v in values:
-                if isinstance(v, list):
-                    display_values.append(', '.join(v))
-                else:
-                    display_values.append(str(v))
+            diff = self._compare_values([self._format_value_for_display(v) for v in values])
+            # 使用格式化方法处理显示
+            display_values = [self._format_value_for_display(v) for v in values]
             rows.append([label] + display_values + [diff])
 
         return self._format_table(rows)
