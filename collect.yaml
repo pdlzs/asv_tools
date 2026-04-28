@@ -4,11 +4,13 @@
 machines:
   server1:
     host: "zen4.example.com"
+    hostname: "zen4"                  # 显示名称（用于对比报告标识）
     port: 22
     username: "user"
 
   server2:
     host: "kunpeng950.example.com"
+    hostname: "kunpeng950"            # 显示名称
     port: 22
     username: "user"
 

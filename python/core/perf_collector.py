@@ -20,14 +20,15 @@ from core.collect_config import CollectMachineConfig
 @dataclass
 class PerfConfig:
     """性能配置数据结构"""
-    machine_name: str
+    machine_name: str                  # 配置文件中的 name
+    display_name: str                  # 显示名称（hostname 或 name）
     machine: Dict[str, Any]
-    bios: Dict[str, str]              # dmidecode 原始输出
+    bios: Dict[str, Any]               # 解析后的 BIOS 信息（包含原始输出和解析字段）
     cpu: Dict[str, Any]
     memory: Dict[str, Any]
     kernel_params: Dict[str, Any]
-    environment: Dict[str, str]       # python/blas/lapack/gcc
-    env_vars: Dict[str, str]          # 性能相关环境变量
+    environment: Dict[str, str]        # python/blas/lapack/gcc
+    env_vars: Dict[str, str]           # 性能相关环境变量
     limits: Dict[str, Any]
     collect_time: str = ""
 
@@ -158,14 +159,18 @@ echo '=== COLLECT_DONE ==='
         from datetime import datetime
         collect_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+        # 解析 dmidecode 输出
+        bios_info = self._parse_bios_info(
+            sections.get('DMIDECODE_PROCESSOR', 'NA'),
+            sections.get('DMIDECODE_MEMORY', 'NA'),
+            sections.get('DMIDECODE_SYSTEM', 'NA')
+        )
+
         return PerfConfig(
             machine_name=self.machine.name,
+            display_name=self.machine.display_name,
             machine=self._parse_machine_info(sections.get('MACHINE_INFO', 'NA')),
-            bios={
-                'dmidecode_processor': sections.get('DMIDECODE_PROCESSOR', 'NA'),
-                'dmidecode_memory': sections.get('DMIDECODE_MEMORY', 'NA'),
-                'dmidecode_system': sections.get('DMIDECODE_SYSTEM', 'NA'),
-            },
+            bios=bios_info,
             cpu=self._parse_cpu_info(sections.get('CPU_INFO', 'NA')),
             memory=self._parse_memory_info(sections.get('MEMORY_INFO', 'NA')),
             kernel_params=self._parse_kernel_params(sections.get('KERNEL_PARAMS', 'NA')),
@@ -202,6 +207,184 @@ echo '=== COLLECT_DONE ==='
                     info['virtualization'] = line.strip()
 
         return info
+
+    def _parse_bios_info(self, processor_raw: str, memory_raw: str, system_raw: str) -> Dict[str, Any]:
+        """
+        解析 dmidecode 输出，提取关键 BIOS 配置字段
+
+        dmidecode 输出格式：
+        Handle 0x0027, DMI type 4, 48 bytes
+        Processor Information
+            Socket Designation: CPU0
+            Type: Central Processor
+            ...
+
+        Returns:
+            包含解析字段和原始输出的字典
+        """
+        bios_info = {
+            'processor': {'raw': processor_raw},
+            'memory': {'raw': memory_raw},
+            'system': {'raw': system_raw},
+        }
+
+        # 解析 Processor Information
+        if processor_raw and not processor_raw.startswith('NA:'):
+            bios_info['processor'].update(self._parse_dmidecode_section(
+                processor_raw,
+                ['Socket Designation', 'Type', 'Family', 'Manufacturer', 'Version',
+                 'Voltage', 'External Clock', 'Max Speed', 'Current Speed',
+                 'Status', 'Upgrade', 'L1 Cache Handle', 'L2 Cache Handle', 'L3 Cache Handle',
+                 'Core Count', 'Core Enabled', 'Thread Count']
+            ))
+
+        # 解析 Memory Device
+        if memory_raw and not memory_raw.startswith('NA:'):
+            memory_devices = self._parse_dmidecode_memory(memory_raw)
+            bios_info['memory'].update(memory_devices)
+
+        # 解析 System Information
+        if system_raw and not system_raw.startswith('NA:'):
+            bios_info['system'].update(self._parse_dmidecode_section(
+                system_raw,
+                ['Manufacturer', 'Product Name', 'Version', 'Serial Number', 'UUID',
+                 'Wake-up Type', 'SKU Number', 'Family']
+            ))
+
+        return bios_info
+
+    def _parse_dmidecode_section(self, raw: str, target_fields: List[str]) -> Dict[str, Any]:
+        """
+        解析 dmidecode 某一类型的信息
+
+        Args:
+            raw: dmidecode 原始输出
+            target_fields: 需要提取的字段名列表
+
+        Returns:
+            提取的字段字典
+        """
+        result = {}
+        lines = raw.split('\n')
+
+        current_handle = None
+        current_type = None
+
+        for line in lines:
+            line = line.rstrip()
+
+            # Handle 行: Handle 0x0027, DMI type 4, 48 bytes
+            if line.startswith('Handle '):
+                current_handle = line
+                continue
+
+            # 类型行: Processor Information / Memory Device / System Information
+            if not line.startswith(' ') and not line.startswith('\t') and line.strip() and ':' not in line:
+                current_type = line.strip()
+                continue
+
+            # 字段行:    Socket Designation: CPU0
+            if line.startswith('    ') or line.startswith('\t'):
+                stripped = line.strip()
+                if ':' in stripped:
+                    # 处理可能的嵌套字段（如 Flags: 后面的列表）
+                    parts = stripped.split(':', 1)
+                    key = parts[0].strip()
+                    value = parts[1].strip() if len(parts) > 1 else ''
+
+                    # 检查是否是目标字段
+                    if key in target_fields:
+                        result[key] = value
+
+        return result
+
+    def _parse_dmidecode_memory(self, raw: str) -> Dict[str, Any]:
+        """
+        解析 dmidecode 内存信息
+
+        提取 Physical Memory Array 和 Memory Device 信息
+        """
+        result = {}
+        lines = raw.split('\n')
+
+        current_type = None
+        physical_array = {}
+
+        for line in lines:
+            line = line.rstrip()
+
+            # 类型行
+            if not line.startswith(' ') and not line.startswith('\t') and line.strip() and ':' not in line:
+                current_type = line.strip()
+                continue
+
+            # 字段行
+            if line.startswith('    ') or line.startswith('\t'):
+                stripped = line.strip()
+                if ':' in stripped:
+                    parts = stripped.split(':', 1)
+                    key = parts[0].strip()
+                    value = parts[1].strip() if len(parts) > 1 else ''
+
+                    if current_type == 'Physical Memory Array':
+                        physical_array[key] = value
+
+        # 提取关键信息
+        if 'Maximum Capacity' in physical_array:
+            result['max_capacity'] = physical_array['Maximum Capacity']
+        if 'Number Of Devices' in physical_array:
+            result['num_devices'] = physical_array['Number Of Devices']
+        if 'Error Correction Type' in physical_array:
+            result['ecc_type'] = physical_array['Error Correction Type']
+
+        # 解析所有内存设备
+        result['devices'] = self._extract_memory_devices(raw)
+
+        return result
+
+    def _extract_memory_devices(self, raw: str) -> List[Dict[str, str]]:
+        """提取所有内存设备信息"""
+        devices = []
+        lines = raw.split('\n')
+
+        current_device = {}
+        in_device = False
+
+        for line in lines:
+            line = line.rstrip()
+
+            if line.strip() == 'Memory Device':
+                # 开始新的设备
+                if current_device and any(current_device.values()):
+                    devices.append(current_device)
+                current_device = {}
+                in_device = True
+                continue
+
+            if in_device and (line.startswith('    ') or line.startswith('\t')):
+                stripped = line.strip()
+                if ':' in stripped:
+                    parts = stripped.split(':', 1)
+                    key = parts[0].strip()
+                    value = parts[1].strip() if len(parts) > 1 else ''
+
+                    # 只记录关键字段
+                    if key in ['Size', 'Form Factor', 'Type', 'Type Detail', 'Speed',
+                               'Manufacturer', 'Serial Number', 'Part Number']:
+                        current_device[key] = value
+
+            # 如果遇到新的类型行，结束当前设备
+            if not line.startswith(' ') and not line.startswith('\t') and line.strip() and ':' not in line:
+                if in_device and current_device and any(current_device.values()):
+                    devices.append(current_device)
+                    current_device = {}
+                    in_device = False
+
+        # 保存最后一个设备
+        if current_device and any(current_device.values()):
+            devices.append(current_device)
+
+        return devices
 
     def _parse_cpu_info(self, raw: str) -> Dict[str, Any]:
         """解析 CPU 信息（lscpu 输出）"""
@@ -352,8 +535,9 @@ echo '=== COLLECT_DONE ==='
         """创建空配置（用于失败情况）"""
         return PerfConfig(
             machine_name=self.machine.name,
+            display_name=self.machine.display_name,
             machine={'error': error_msg},
-            bios={'error': error_msg},
+            bios={'processor': {'error': error_msg}, 'memory': {'error': error_msg}, 'system': {'error': error_msg}},
             cpu={'error': error_msg},
             memory={'error': error_msg},
             kernel_params={'error': error_msg},
@@ -374,7 +558,8 @@ def perf_config_to_yaml(config: PerfConfig) -> str:
 
     data = {
         '采集时间': config.collect_time,
-        '主机名': config.machine_name,
+        '主机标识': config.machine_name,
+        '显示名称': config.display_name,
         'machine': config.machine,
         'bios': config.bios,
         'cpu': config.cpu,

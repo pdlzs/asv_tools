@@ -143,6 +143,14 @@ python/
 
 **collect 配置** (`collect.yaml`):
 - `machines`: 服务器配置（1台或多台），支持 `host: "local"` 本地执行
+- `machines.hostname`: 显示名称（可选，用于对比报告标识机器，默认使用 name）
 - `scripts`: 每台机器的环境初始化脚本（如激活 conda、设置环境变量）
-- `output.dir`: 输出目录，默认 `./perf_results`
+- `output.dir`: 输出目录，默认 `./collect_results`
 - `output.custom_info`: 自定义标识，用于输出文件名
+
+**collect 常用选项**:
+- `--force, -f`: 强制执行，跳过工具可用性检查
+- `--dry-run, -n`: 显示命令不执行
+- `--verbose, -v`: 详细输出
+
+**工具检查**: 执行前会检查服务器端工具可用性（lscpu、dmidecode、numactl、python、gcc、conda），缺失工具会给出安装提示，使用 `--force` 可跳过检查强制执行。

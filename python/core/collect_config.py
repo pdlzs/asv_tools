@@ -11,13 +11,14 @@ class CollectMachineConfig:
     """采集机器配置"""
     name: str
     host: str                           # "local" 表示本地执行
+    hostname: Optional[str] = None      # 显示名称（可选，用于对比报告标识）
     port: int = 22
     username: Optional[str] = None
 
     @property
     def display_name(self) -> str:
-        """显示名称，默认使用 name"""
-        return self.name
+        """显示名称，优先使用 hostname，否则使用 name"""
+        return self.hostname if self.hostname else self.name
 
     @property
     def is_local(self) -> bool:
@@ -76,6 +77,7 @@ def load_collect_config(config_path: str) -> CollectConfig:
         machines[name] = CollectMachineConfig(
             name=name,
             host=m["host"],
+            hostname=m.get("hostname"),       # 可选的显示名称
             port=m.get("port", 22),
             username=m.get("username")
         )

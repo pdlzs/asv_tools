@@ -64,8 +64,8 @@ class PerfComparator:
         return '\n'.join(lines)
 
     def _format_machines_header(self) -> str:
-        """格式化机器列表标题"""
-        names = [cfg.machine_name for cfg in self.configs]
+        """格式化机器列表标题，使用 display_name"""
+        names = [cfg.display_name for cfg in self.configs]
         return ' vs '.join(names)
 
     def _get_collect_times(self) -> str:
@@ -74,8 +74,8 @@ class PerfComparator:
         return ', '.join(times) if times else '未知'
 
     def _get_headers(self) -> List[str]:
-        """生成表格列标题"""
-        return ['配置项'] + [cfg.machine_name for cfg in self.configs] + ['差异']
+        """生成表格列标题，使用 display_name"""
+        return ['配置项'] + [cfg.display_name for cfg in self.configs] + ['差异']
 
     def _format_table(self, rows: List[List[str]]) -> str:
         """格式化 Markdown 表格"""
@@ -249,36 +249,163 @@ class PerfComparator:
         return self._format_table(rows)
 
     def _compare_bios(self) -> str:
-        """对比 BIOS 配置（简要说明）"""
+        """对比 BIOS 配置，逐字段对比"""
         lines = []
+
+        # 1. 系统信息对比
+        lines.append("### 系统信息")
+        lines.append("")
+        rows = [self._get_headers()]
+        system_fields = ['Manufacturer', 'Product Name', 'Version', 'Serial Number', 'UUID']
+        for field in system_fields:
+            values = []
+            for cfg in self.configs:
+                bios = cfg.bios
+                if isinstance(bios, dict) and 'system' in bios:
+                    system_info = bios['system']
+                    if isinstance(system_info, dict):
+                        values.append(system_info.get(field, 'NA'))
+                    else:
+                        values.append('NA')
+                else:
+                    values.append('NA')
+            diff = self._compare_values(values)
+            rows.append([field] + values + [diff])
+        lines.append(self._format_table(rows))
+        lines.append("")
+
+        # 2. CPU 处理器信息对比
+        lines.append("### CPU 处理器信息")
+        lines.append("")
+        rows = [self._get_headers()]
+        processor_fields = ['Socket Designation', 'Manufacturer', 'Version', 'Family',
+                          'Core Count', 'Core Enabled', 'Thread Count',
+                          'Voltage', 'External Clock', 'Max Speed', 'Current Speed']
+        for field in processor_fields:
+            values = []
+            for cfg in self.configs:
+                bios = cfg.bios
+                if isinstance(bios, dict) and 'processor' in bios:
+                    proc_info = bios['processor']
+                    if isinstance(proc_info, dict):
+                        values.append(proc_info.get(field, 'NA'))
+                    else:
+                        values.append('NA')
+                else:
+                    values.append('NA')
+            diff = self._compare_values(values)
+            rows.append([field] + values + [diff])
+        lines.append(self._format_table(rows))
+        lines.append("")
+
+        # 3. 内存阵列信息对比
+        lines.append("### 内存阵列信息")
+        lines.append("")
+        rows = [self._get_headers()]
+        memory_array_fields = ['max_capacity', 'num_devices', 'ecc_type']
+        field_labels = ['最大容量', '设备数量', '纠错类型']
+        for field, label in zip(memory_array_fields, field_labels):
+            values = []
+            for cfg in self.configs:
+                bios = cfg.bios
+                if isinstance(bios, dict) and 'memory' in bios:
+                    mem_info = bios['memory']
+                    if isinstance(mem_info, dict):
+                        values.append(mem_info.get(field, 'NA'))
+                    else:
+                        values.append('NA')
+                else:
+                    values.append('NA')
+            diff = self._compare_values(values)
+            rows.append([label] + values + [diff])
+        lines.append(self._format_table(rows))
+        lines.append("")
+
+        # 4. 内存设备详情（汇总）
+        lines.append("### 内存设备汇总")
+        lines.append("")
         for cfg in self.configs:
             bios = cfg.bios
-            processor_info = bios.get('dmidecode_processor', 'NA')
-            memory_info = bios.get('dmidecode_memory', 'NA')
-            system_info = bios.get('dmidecode_system', 'NA')
+            if isinstance(bios, dict) and 'memory' in bios:
+                mem_info = bios['memory']
+                if isinstance(mem_info, dict) and 'devices' in mem_info:
+                    devices = mem_info['devices']
+                    lines.append(f"**{cfg.display_name}**: {len(devices)} 个内存设备")
 
-            lines.append(f"### {cfg.machine_name}")
+                    # 统计内存设备信息
+                    size_counts = {}
+                    type_counts = {}
+                    speed_counts = {}
+                    for dev in devices:
+                        if isinstance(dev, dict):
+                            size = dev.get('Size', 'Unknown')
+                            mem_type = dev.get('Type', 'Unknown')
+                            speed = dev.get('Speed', 'Unknown')
+                            size_counts[size] = size_counts.get(size, 0) + 1
+                            type_counts[mem_type] = type_counts.get(mem_type, 0) + 1
+                            speed_counts[speed] = speed_counts.get(speed, 0) + 1
+
+                    lines.append(f"  - 容量分布: {dict(size_counts)}")
+                    lines.append(f"  - 类型分布: {dict(type_counts)}")
+                    lines.append(f"  - 速度分布: {dict(speed_counts)}")
+                    lines.append("")
+                else:
+                    lines.append(f"**{cfg.display_name}**: NA")
+                    lines.append("")
+            else:
+                lines.append(f"**{cfg.display_name}**: NA")
+                lines.append("")
+
+        # 5. 原始输出（可展开查看）
+        lines.append("### 原始 dmidecode 输出")
+        lines.append("")
+        lines.append("<details>")
+        lines.append("<summary>点击展开查看完整 dmidecode 输出</summary>")
+        lines.append("")
+        for cfg in self.configs:
+            bios = cfg.bios
+            lines.append(f"#### {cfg.display_name}")
             lines.append("")
-            lines.append("**dmidecode -t processor 输出:**")
-            lines.append("")
-            lines.append("```")
-            lines.append(processor_info[:500] + '...' if len(processor_info) > 500 else processor_info)
-            lines.append("```")
-            lines.append("")
-            lines.append("**dmidecode -t memory 输出:**")
-            lines.append("")
-            lines.append("```")
-            lines.append(memory_info[:500] + '...' if len(memory_info) > 500 else memory_info)
-            lines.append("```")
-            lines.append("")
-            lines.append("**dmidecode -t system 输出:**")
-            lines.append("")
-            lines.append("```")
-            lines.append(system_info[:500] + '...' if len(system_info) > 500 else system_info)
-            lines.append("```")
-            lines.append("")
-            lines.append("---")
-            lines.append("")
+            if isinstance(bios, dict):
+                # processor
+                proc_raw = bios.get('processor', {})
+                if isinstance(proc_raw, dict):
+                    raw = proc_raw.get('raw', 'NA')
+                else:
+                    raw = 'NA'
+                lines.append("**dmidecode -t processor:**")
+                lines.append("```")
+                lines.append(raw[:1000] + '...' if len(raw) > 1000 else raw)
+                lines.append("```")
+                lines.append("")
+
+                # memory
+                mem_raw = bios.get('memory', {})
+                if isinstance(mem_raw, dict):
+                    raw = mem_raw.get('raw', 'NA')
+                else:
+                    raw = 'NA'
+                lines.append("**dmidecode -t memory:**")
+                lines.append("```")
+                lines.append(raw[:1000] + '...' if len(raw) > 1000 else raw)
+                lines.append("```")
+                lines.append("")
+
+                # system
+                sys_raw = bios.get('system', {})
+                if isinstance(sys_raw, dict):
+                    raw = sys_raw.get('raw', 'NA')
+                else:
+                    raw = 'NA'
+                lines.append("**dmidecode -t system:**")
+                lines.append("```")
+                lines.append(raw[:1000] + '...' if len(raw) > 1000 else raw)
+                lines.append("```")
+                lines.append("")
+            else:
+                lines.append("dmidecode 输出: NA")
+                lines.append("")
+        lines.append("</details>")
 
         return '\n'.join(lines)
 
@@ -301,7 +428,7 @@ class PerfComparator:
         if len(set([v for v in blas_versions if v != 'NA'])) > 1:
             lines.append("2. **BLAS 库差异**:")
             for i, (cfg, blas) in enumerate(zip(self.configs, blas_versions)):
-                lines.append(f"   - {cfg.machine_name}: {blas}")
+                lines.append(f"   - {cfg.display_name}: {blas}")
             lines.append("   - MKL 在 Intel CPU 上通常有 20-40% 矩阵运算优势")
             lines.append("   - OpenBLAS 是跨平台开源选择，ARM 平台常用")
             lines.append("")
@@ -320,7 +447,7 @@ class PerfComparator:
         if len(set([v for v in numa_nodes if v != 'NA'])) > 1:
             lines.append("4. **NUMA 配置差异**:")
             for cfg, numa in zip(self.configs, numa_nodes):
-                lines.append(f"   - {cfg.machine_name}: {numa} 个节点")
+                lines.append(f"   - {cfg.display_name}: {numa} 个节点")
             lines.append("   - 多 NUMA 节点需注意内存绑定优化，避免跨节点访问")
             lines.append("")
 
@@ -330,7 +457,7 @@ class PerfComparator:
             omp = cfg.env_vars.get('OMP_NUM_THREADS', '-')
             mkl = cfg.env_vars.get('MKL_NUM_THREADS', '-')
             if omp != '-' or mkl != '-':
-                thread_vars.append((cfg.machine_name, omp, mkl))
+                thread_vars.append((cfg.display_name, omp, mkl))
 
         if len(thread_vars) > 1:
             omp_values = [t[1] for t in thread_vars]

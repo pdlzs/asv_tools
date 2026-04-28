@@ -4,6 +4,7 @@
 machines:
   local_machine:
     host: "local"
+    hostname: "localhost"             # 显示名称
 
 scripts:
   local_machine: |

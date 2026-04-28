@@ -16,6 +16,173 @@ def setup_logging(verbose: bool = False):
     logging.basicConfig(level=level, format='%(message)s')
 
 
+# 工具检查配置
+REQUIRED_TOOLS = [
+    # 基础工具（几乎都有，不检查）
+]
+
+OPTIONAL_TOOLS = [
+    {
+        'name': 'lscpu',
+        'check_cmd': 'lscpu --version 2>/dev/null || which lscpu',
+        'install_hint': '通常系统自带。缺失时: apt install util-linux (Ubuntu) 或 yum install util-linux (CentOS)',
+        'category': 'CPU 信息',
+    },
+    {
+        'name': 'dmidecode',
+        'check_cmd': 'which dmidecode',
+        'install_hint': 'apt install dmidecode (Ubuntu) 或 yum install dmidecode (CentOS)。需要 root 权限运行',
+        'category': 'BIOS 信息',
+        'need_root': True,
+    },
+    {
+        'name': 'numactl',
+        'check_cmd': 'which numactl',
+        'install_hint': 'apt install numactl (Ubuntu) 或 yum install numactl (CentOS)',
+        'category': 'NUMA 拓扑',
+    },
+    {
+        'name': 'python',
+        'check_cmd': 'which python || which python3',
+        'install_hint': '系统应已安装 Python。若缺失: apt install python3',
+        'category': 'Python 版本',
+    },
+    {
+        'name': 'gcc',
+        'check_cmd': 'which gcc',
+        'install_hint': 'apt install gcc (Ubuntu) 或 yum install gcc (CentOS)',
+        'category': 'GCC 版本',
+    },
+    {
+        'name': 'conda',
+        'check_cmd': 'which conda',
+        'install_hint': '从 https://docs.conda.io 安装 Miniconda 或 Anaconda',
+        'category': 'BLAS/LAPACK 检测',
+        'alternative': 'pip',
+    },
+]
+
+
+def check_tools_on_machine(machine_name: str, config: CollectConfig, verbose: bool = False) -> tuple[bool, list]:
+    """
+    检查单台机器上的工具可用性
+
+    先执行 scripts（激活环境），再检查工具可用性
+
+    Returns:
+        (all_ok, missing_tools): 全部可用返回 True，缺失工具列表
+    """
+    from ssh_utils import SSHClient, SSHConfig
+
+    machine = config.machines[machine_name]
+    script = config.get_script_for_machine(machine_name)
+
+    ssh_config = SSHConfig(
+        host=machine.host,
+        username=machine.username or "",
+        port=machine.port
+    )
+    client = SSHClient(ssh_config)
+
+    # 构建检查脚本：先执行 scripts（激活环境），再检查工具
+    check_script = ""
+
+    # 1. 先执行 scripts（激活环境）
+    if script:
+        check_script += f"""
+# === 环境初始化 ===
+{script}
+"""
+    else:
+        check_script += "# 无环境初始化脚本\n"
+
+    # 2. 等待环境激活后，开始检查工具
+    check_script += """
+# === 工具检查 ===
+echo 'TOOL_CHECK_START'
+"""
+    for tool in OPTIONAL_TOOLS:
+        check_script += f"""
+echo 'CHECK_TOOL: {tool['name']}'
+{tool['check_cmd']} >/dev/null 2>&1 && echo 'RESULT: OK' || echo 'RESULT: MISSING'
+"""
+    check_script += "echo 'TOOL_CHECK_END'\n"
+
+    # 执行检查（不输出到终端，避免干扰解析）
+    success, output = client.execute(check_script, stream_output=False)
+
+    if not success:
+        return False, [{'name': 'connection', 'category': '连接', 'hint': f'无法连接到 {machine.host}'}]
+
+    if verbose:
+        print(f"[{machine_name}] 工具检查输出:\n{output}")
+
+    # 解析结果：只解析 TOOL_CHECK_START 和 TOOL_CHECK_END 之间的内容
+    missing_tools = []
+    in_check_section = False
+    current_tool = None
+
+    for line in output.split('\n'):
+        if line.strip() == 'TOOL_CHECK_START':
+            in_check_section = True
+            continue
+        elif line.strip() == 'TOOL_CHECK_END':
+            break
+
+        if not in_check_section:
+            continue
+
+        if line.startswith('CHECK_TOOL:'):
+            current_tool = line.split(':', 1)[1].strip()
+        elif line.startswith('RESULT:'):
+            result = line.split(':', 1)[1].strip()
+            if result == 'MISSING' and current_tool:
+                # 找到对应的工具信息
+                for tool in OPTIONAL_TOOLS:
+                    if tool['name'] == current_tool:
+                        missing_tools.append({
+                            'name': tool['name'],
+                            'category': tool['category'],
+                            'hint': tool['install_hint'],
+                            'need_root': tool.get('need_root', False),
+                        })
+                        break
+
+    return len(missing_tools) == 0, missing_tools
+
+
+def print_tool_check_report(results: dict):
+    """打印工具检查报告"""
+    print("\n" + "=" * 60)
+    print("工具检查报告")
+    print("=" * 60)
+
+    for machine_name, (ok, missing) in results.items():
+        print(f"\n[{machine_name}]")
+        if ok:
+            print("  ✓ 所有工具可用")
+        else:
+            print("  ⚠️ 缺失以下工具:")
+            for tool in missing:
+                if tool['name'] == 'connection':
+                    print(f"    - {tool['category']}: {tool['hint']}")
+                else:
+                    print(f"    - {tool['name']} ({tool['category']})")
+                    print(f"      安装提示: {tool['hint']}")
+                    if tool.get('need_root'):
+                        print(f"      注意: 需要 root 权限运行")
+
+    # 汇总
+    all_ok = all(r[0] for r in results.values())
+    if not all_ok:
+        print("\n" + "-" * 60)
+        print("部分工具缺失，采集结果中对应项将显示 NA。")
+        print("如需强制执行，请使用 --force 参数跳过检查。")
+        print("-" * 60)
+
+    return all_ok
+
+
 def create_output_dir(config: CollectConfig, args) -> Path:
     """创建输出目录"""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -126,7 +293,20 @@ def run_collect(args) -> int:
         if not test_connections(config, args.verbose):
             return 1
 
-    # 6. 采集各机器配置
+    # 6. 工具检查（非 dry-run 且非 force）
+    if not args.dry_run and not args.force:
+        print("\n检查工具可用性...")
+        tool_check_results = {}
+        for machine_name in config.machines.keys():
+            ok, missing = check_tools_on_machine(machine_name, config, args.verbose)
+            tool_check_results[machine_name] = (ok, missing)
+
+        all_ok = print_tool_check_report(tool_check_results)
+        if not all_ok:
+            print("\n工具检查未通过，请安装缺失工具或使用 --force 强制执行")
+            return 1
+
+    # 7. 采集各机器配置
     configs = []
     for machine_name in config.machines.keys():
         print(f"\n{'='*50}")
@@ -155,7 +335,7 @@ def run_collect(args) -> int:
         print("\n[DRY-RUN] 命令预览完成")
         return 0
 
-    # 7. 生成对比报告
+    # 8. 生成对比报告
     if len(configs) >= 2:
         print(f"\n{'='*50}")
         print("生成性能配置对比报告...")

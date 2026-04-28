@@ -84,6 +84,8 @@ def main():
                                help='Show commands without executing')
     collect_parser.add_argument('--verbose', '-v', action='store_true',
                                help='Verbose output')
+    collect_parser.add_argument('--force', '-f', action='store_true',
+                               help='Force execution, skip tool availability check')
     collect_parser.add_argument('--output-dir', '-o', help='Output directory')
     collect_parser.add_argument('--info', '-i', help='Custom info for output filename')
 
