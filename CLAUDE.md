@@ -102,7 +102,7 @@ python/
 
 **cont 命令**:
 1. `main.py` 解析 CLI 参数，调用 cont 子命令
-2. `cont_cmd.py` 加载配置 → 验证 → 测试连接 → 执行脚本 → 调用 `asv continuous base branch`
+2. `cont_cmd.py` 加载配置 → 验证 → 测试连接 → 执行脚本（脚本中自定义 asv continuous 命令）
 
 **collect 命令**:
 1. `main.py` 解析 CLI 参数，调用 collect 子命令
@@ -121,9 +121,8 @@ python/
 **cont 模式**:
 - 支持一台或多台机器，每台机器上运行相同的 commit 对比
 - `host: "local"` 表示本地执行，远程机器需配置 username
-- scripts 用于设置环境（如激活 conda），支持 `{work_dir}` 占位符
-- asv_options 不指定则使用官方默认值
-- 支持所有 `asv continuous` 选项：bench, factor, machine, python, split, only_changed 等
+- scripts 完全控制执行内容，支持 `{work_dir}`、`{base}`、`{branch}` 占位符
+- commits 为可选配置，提供 `{base}` 和 `{branch}` 模板变量
 
 ## 配置文件格式
 
@@ -139,10 +138,8 @@ python/
 
 **cont 配置** (`cont.yaml`):
 - `machines`: 服务器配置（1台或多台），支持 `host: "local"` 本地执行
-- `commits.base`: 基准 commit
-- `commits.branch`: 测试 commit
-- `scripts`: 每台机器的执行脚本，支持 `{work_dir}` 占位符
-- `asv_options`: ASV 选项（可选，不指定使用官方默认值）
+- `commits`: 可选，提供 `{base}` 和 `{branch}` 模板变量
+- `scripts`: 每台机器的执行脚本，支持 `{work_dir}`、`{base}`、`{branch}` 占位符
 - `output.dir`: 输出目录
 
 **collect 配置** (`collect.yaml`):

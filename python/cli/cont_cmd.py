@@ -4,7 +4,6 @@
 在指定机器上对比两个 commit 的性能。
 """
 
-import subprocess
 import sys
 import os
 from pathlib import Path
@@ -15,27 +14,13 @@ from core.cont_config import load_cont_config
 from ssh_utils import SSHClient, SSHConfig
 
 
-def build_asv_continuous_command(config) -> List[str]:
-    """构建 asv continuous 命令"""
-    cmd = ["asv", "continuous"]
-
-    # 添加 asv_options（只包含非 None 的选项）
-    cmd.extend(config.asv_options.to_cli_args())
-
-    # 添加 commits
-    cmd.append(config.commits.base)
-    cmd.append(config.commits.branch)
-
-    return cmd
-
-
-def run_asv_continuous_on_machine(machine, config, script: str, dry_run: bool = False) -> tuple:
-    """在指定机器上运行 asv continuous
+def run_script_on_machine(machine, config, script: str, dry_run: bool = False) -> tuple:
+    """在指定机器上运行脚本
 
     Args:
         machine: ContMachineConfig
         config: ContConfig
-        script: 执行前的脚本
+        script: 执行脚本（已替换模板变量）
         dry_run: 只显示命令，不执行
 
     Returns:
@@ -52,30 +37,20 @@ def run_asv_continuous_on_machine(machine, config, script: str, dry_run: bool = 
     machine_name = machine.display_name
     work_dir = machine.asv_project_dir
 
-    # 构建 asv continuous 命令
-    asv_cmd = build_asv_continuous_command(config)
-
-    # 合成完整命令：先执行 script，再执行 asv continuous
-    if script:
-        # 替换 {work_dir} 占位符
-        script = script.replace("{work_dir}", work_dir)
-        full_cmd = f"{script}\n{subprocess.list2cmdline(asv_cmd)}"
-    else:
-        full_cmd = subprocess.list2cmdline(asv_cmd)
-
     print(f"\n{'='*50}")
     print(f"🔧 机器: {machine_name}")
     print(f"📁 目录: {work_dir}")
-    print(f"🔀 对比: {config.commits.base} vs {config.commits.branch}")
-    print(f"📋 命令: {full_cmd}")
+    if config.commits:
+        print(f"🔀 对比: {config.commits.base} vs {config.commits.branch}")
+    print(f"📋 命令:\n{script}")
     print(f"{'='*50}")
 
     if dry_run:
         print("📋 Dry-run 模式，跳过执行")
         return True, "dry-run", machine_name
 
-    # 执行命令
-    success, output = ssh_client.execute(full_cmd, work_dir=work_dir, stream_output=True)
+    # 执行脚本
+    success, output = ssh_client.execute(script, work_dir=work_dir, stream_output=True)
 
     return success, output, machine_name
 
@@ -97,28 +72,19 @@ def save_output_summary(config, results: List[tuple]) -> None:
         "ASV Continuous Comparison Summary",
         "=" * 50,
         f"Time: {datetime.now().isoformat()}",
-        f"Base Commit: {config.commits.base}",
-        f"Branch Commit: {config.commits.branch}",
-        "",
-        "ASV Options:",
     ]
 
-    for name, value in [
-        ('bench', config.asv_options.bench),
-        ('factor', config.asv_options.factor),
-        ('machine', config.asv_options.machine),
-        ('python', config.asv_options.python),
-        ('split', config.asv_options.split),
-        ('only_changed', config.asv_options.only_changed),
-        ('show_stderr', config.asv_options.show_stderr),
-        ('quick', config.asv_options.quick),
-        ('verbose', config.asv_options.verbose),
-    ]:
-        content_lines.append(f"  {name}: {value or 'default'}")
+    if config.commits:
+        content_lines.extend([
+            f"Base Commit: {config.commits.base}",
+            f"Branch Commit: {config.commits.branch}",
+        ])
 
-    content_lines.append("")
-    content_lines.append("Results:")
-    content_lines.append("-" * 50)
+    content_lines.extend([
+        "",
+        "Results:",
+        "-" * 50,
+    ])
 
     for machine_name, success, output in results:
         status = "✓ SUCCESS" if success else "✗ FAILED"
@@ -163,30 +129,10 @@ def run_continuous(args) -> int:
         location = "本地" if machine.is_local else f"{machine.username}@{machine.host}:{machine.port}"
         print(f"   - {machine.display_name}: {location}")
 
-    print(f"\n对比 Commits:")
-    print(f"   基准: {config.commits.base}")
-    print(f"   测试: {config.commits.branch}")
-
-    # 显示 ASV 选项（只显示非 None 的）
-    non_default_options = []
-    for name, value in [
-        ('bench', config.asv_options.bench),
-        ('factor', config.asv_options.factor),
-        ('machine', config.asv_options.machine),
-        ('python', config.asv_options.python),
-        ('split', config.asv_options.split),
-        ('only_changed', config.asv_options.only_changed),
-        ('show_stderr', config.asv_options.show_stderr),
-        ('quick', config.asv_options.quick),
-        ('verbose', config.asv_options.verbose),
-    ]:
-        if value is not None:
-            non_default_options.append(f"{name}={value}")
-
-    if non_default_options:
-        print(f"\nASV 选项: {', '.join(non_default_options)}")
-    else:
-        print(f"\nASV 选项: 使用官方默认值")
+    if config.commits:
+        print(f"\n模板变量:")
+        print(f"   {{base}}: {config.commits.base}")
+        print(f"   {{branch}}: {config.commits.branch}")
 
     print(f"\n输出目录: {config.output.dir}")
     print("="*50)
@@ -211,11 +157,11 @@ def run_continuous(args) -> int:
                 print(f"      请检查 SSH 配置或运行 'python main.py ssh-setup {config_file}'")
                 return 1
 
-    # 在每台机器上执行 asv continuous
+    # 在每台机器上执行脚本
     results = []
     for name, machine in config.machines.items():
         script = config.get_script_for_machine(name)
-        success, output, machine_name = run_asv_continuous_on_machine(
+        success, output, machine_name = run_script_on_machine(
             machine, config, script, dry_run=args.dry_run
         )
         results.append((machine_name, success, output))

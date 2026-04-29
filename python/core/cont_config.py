@@ -34,45 +34,6 @@ class CommitsConfig:
 
 
 @dataclass
-class AsvOptionsConfig:
-    """ASV continuous 选项配置（所有字段可选，使用官方默认值）"""
-    bench: Optional[str] = None
-    factor: Optional[float] = None
-    machine: Optional[str] = None
-    python: Optional[str] = None
-    split: Optional[bool] = None
-    only_changed: Optional[bool] = None
-    show_stderr: Optional[bool] = None
-    quick: Optional[bool] = None
-    verbose: Optional[bool] = None
-
-    def to_cli_args(self) -> List[str]:
-        """转换为 asv continuous CLI 参数（只包含非 None 的选项）"""
-        args = []
-
-        if self.bench:
-            args.extend(["--bench", self.bench])
-        if self.factor is not None:
-            args.extend(["--factor", str(self.factor)])
-        if self.machine:
-            args.extend(["--machine", self.machine])
-        if self.python:
-            args.extend(["--python", self.python])
-        if self.split:
-            args.append("--split")
-        if self.only_changed:
-            args.append("--only-changed")
-        if self.show_stderr:
-            args.append("--show-stderr")
-        if self.quick:
-            args.append("--quick")
-        if self.verbose:
-            args.append("--verbose")
-
-        return args
-
-
-@dataclass
 class ContOutputConfig:
     """输出配置"""
     dir: str = "./cont_results"
@@ -91,9 +52,8 @@ class ContRuntimeConfig:
 class ContConfig:
     """ASV continuous 完整配置"""
     machines: Dict[str, ContMachineConfig]
-    commits: CommitsConfig
     scripts: Dict[str, str]
-    asv_options: AsvOptionsConfig = field(default_factory=AsvOptionsConfig)
+    commits: Optional[CommitsConfig] = None  # 可选，作为模板变量
     output: ContOutputConfig = field(default_factory=ContOutputConfig)
     runtime: ContRuntimeConfig = field(default_factory=ContRuntimeConfig)
 
@@ -113,17 +73,18 @@ class ContConfig:
             if not machine.is_local and not machine.username:
                 errors.append(f"远程机器 {name} 缺少 username 配置")
 
-        # 验证 commits
-        if not self.commits.base:
-            errors.append("缺少 commits.base 配置")
-        if not self.commits.branch:
-            errors.append("缺少 commits.branch 配置")
-
         return errors
 
     def get_script_for_machine(self, machine_name: str) -> str:
-        """获取指定机器的脚本"""
-        return self.scripts.get(machine_name, "")
+        """获取指定机器的脚本，替换模板变量"""
+        script = self.scripts.get(machine_name, "")
+        machine = self.machines.get(machine_name)
+        if machine:
+            script = script.replace("{work_dir}", machine.asv_project_dir)
+        if self.commits:
+            script = script.replace("{base}", self.commits.base)
+            script = script.replace("{branch}", self.commits.branch)
+        return script
 
 
 def load_cont_config(config_path: str) -> ContConfig:
@@ -143,29 +104,17 @@ def load_cont_config(config_path: str) -> ContConfig:
             username=m.get("username")
         )
 
-    # 解析 commits
+    # 解析 commits（可选，作为模板变量）
     commits_data = data.get("commits", {})
-    commits = CommitsConfig(
-        base=commits_data.get("base", "HEAD~1"),
-        branch=commits_data.get("branch", "HEAD")
-    )
+    commits = None
+    if commits_data:
+        commits = CommitsConfig(
+            base=commits_data.get("base", "HEAD~1"),
+            branch=commits_data.get("branch", "HEAD")
+        )
 
     # 解析 scripts
     scripts = data.get("scripts", {})
-
-    # 解析 asv_options（可选）
-    asv_data = data.get("asv_options", {})
-    asv_options = AsvOptionsConfig(
-        bench=asv_data.get("bench"),
-        factor=asv_data.get("factor"),
-        machine=asv_data.get("machine"),
-        python=asv_data.get("python"),
-        split=asv_data.get("split"),
-        only_changed=asv_data.get("only_changed"),
-        show_stderr=asv_data.get("show_stderr"),
-        quick=asv_data.get("quick"),
-        verbose=asv_data.get("verbose")
-    )
 
     # 解析 output（可选）
     output_data = data.get("output", {})
@@ -186,7 +135,6 @@ def load_cont_config(config_path: str) -> ContConfig:
         machines=machines,
         commits=commits,
         scripts=scripts,
-        asv_options=asv_options,
         output=output,
         runtime=runtime
     )
