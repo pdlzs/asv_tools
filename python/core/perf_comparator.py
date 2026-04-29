@@ -36,42 +36,72 @@ class PerfComparator:
         lines.append("")
         lines.append(self._compare_cpu())
 
-        # 3. NUMA 配置对比（新增详细）
+        # 3. CPU 频率调节器对比
+        lines.append("## CPU 频率调节器对比")
+        lines.append("")
+        lines.append(self._compare_cpu_freq())
+
+        # 4. CPU 漏洞缓解对比
+        lines.append("## CPU 漏洞缓解状态对比")
+        lines.append("")
+        lines.append(self._compare_cpu_vulnerabilities())
+
+        # 5. NUMA 配置对比
         lines.append("## NUMA 配置对比")
         lines.append("")
         lines.append(self._compare_numa())
 
-        # 4. 内存对比（增强）
+        # 6. 内存对比
         lines.append("## 内存对比")
         lines.append("")
         lines.append(self._compare_memory())
 
-        # 5. 环境对比
+        # 7. 透明大页详细配置对比
+        lines.append("## 透明大页详细配置对比")
+        lines.append("")
+        lines.append(self._compare_thp_details())
+
+        # 8. Swap 配置对比
+        lines.append("## Swap 配置对比")
+        lines.append("")
+        lines.append(self._compare_swap_config())
+
+        # 9. 环境对比
         lines.append("## 环境对比")
         lines.append("")
         lines.append(self._compare_environment())
 
-        # 6. 环境变量对比
+        # 10. 环境变量对比
         lines.append("## 环境变量对比")
         lines.append("")
         lines.append(self._compare_env_vars())
 
-        # 7. 内核参数对比
+        # 11. 内核参数对比
         lines.append("## 内核参数对比")
         lines.append("")
         lines.append(self._compare_kernel_params())
 
-        # 8. 系统限制对比（新增）
+        # 12. 内核启动参数对比
+        lines.append("## 内核启动参数对比 (/proc/cmdline)")
+        lines.append("")
+        lines.append(self._compare_cmdline())
+
+        # 13. 系统限制对比
         lines.append("## 系统限制对比 (ulimit)")
         lines.append("")
         lines.append(self._compare_limits())
 
-        # 9. BIOS 配置对比（精简关键信息）
+        # 14. 系统服务对比
+        lines.append("## 系统服务对比")
+        lines.append("")
+        lines.append(self._compare_system_services())
+
+        # 15. BIOS 配置对比
         lines.append("## BIOS 配置")
         lines.append("")
         lines.append(self._compare_bios())
 
-        # 10. 性能影响分析
+        # 16. 性能影响分析
         lines.append("## 性能影响分析")
         lines.append("")
         lines.append(self._analyze_performance_impact())
@@ -691,6 +721,161 @@ class PerfComparator:
 
         return '\n'.join(lines)
 
+    # ========== CPU 频率调节器对比 ==========
+    def _compare_cpu_freq(self) -> str:
+        """对比 CPU 频率调节器配置"""
+        rows = [self._get_headers()]
+
+        compare_fields = [
+            ('驱动', 'cpu_freq.driver'),
+            ('当前调节器', 'cpu_freq.governor'),
+        ]
+
+        for label, path in compare_fields:
+            values = [self._get_value(cfg, path) for cfg in self.configs]
+            diff = self._compare_values(values)
+            rows.append([label] + values + [diff])
+
+        # available_governors
+        gov_values = []
+        for cfg in self.configs:
+            govs = self._get_value(cfg, 'cpu_freq.available_governors')
+            if isinstance(govs, list):
+                gov_values.append(', '.join(govs))
+            else:
+                gov_values.append(str(govs))
+        diff = self._compare_values(gov_values)
+        rows.append(['可用调节器'] + gov_values + [diff])
+
+        return self._format_table(rows)
+
+    # ========== CPU 漏洞缓解对比 ==========
+    def _compare_cpu_vulnerabilities(self) -> str:
+        """对比 CPU 漏洞缓解状态"""
+        all_vulns = set()
+        for cfg in self.configs:
+            all_vulns.update(cfg.cpu_vulnerabilities.keys())
+
+        if not all_vulns:
+            return "无法获取 CPU 漏洞缓解信息"
+
+        rows = [self._get_headers()]
+
+        for vuln in sorted(all_vulns):
+            values = [cfg.cpu_vulnerabilities.get(vuln, 'NA') for cfg in self.configs]
+            diff = self._compare_values(values)
+            rows.append([vuln] + values + [diff])
+
+        return self._format_table(rows)
+
+    # ========== 透明大页详细配置对比 ==========
+    def _compare_thp_details(self) -> str:
+        """对比透明大页详细配置"""
+        rows = [self._get_headers()]
+
+        compare_fields = [
+            ('THP defrag', 'thp_details.defrag'),
+            ('THP shmem', 'thp_details.shmem_enabled'),
+        ]
+
+        for label, path in compare_fields:
+            values = [self._get_value(cfg, path) for cfg in self.configs]
+            diff = self._compare_values(values)
+            rows.append([label] + values + [diff])
+
+        return self._format_table(rows)
+
+    # ========== 内核启动参数对比 ==========
+    def _compare_cmdline(self) -> str:
+        """对比内核启动参数 (/proc/cmdline)"""
+        cmdlines = [cfg.cmdline for cfg in self.configs]
+        if all(c == 'NA' for c in cmdlines):
+            return "无法获取内核启动参数"
+
+        lines = []
+        for cfg in self.configs:
+            lines.append(f"**{cfg.display_name}**:")
+            lines.append("```")
+            lines.append(cfg.cmdline if cfg.cmdline != 'NA' else '不可用')
+            lines.append("```")
+            lines.append("")
+
+        # 解析关键参数进行对比
+        key_params = ['mitigations', 'nosmt', 'isolcpus', 'nohz_full', 'rcu_nocbs',
+                      'transparent_hugepage', 'hugepages', 'nr_cpus', 'mem', 'console',
+                      'quiet', 'splash', 'audit', 'selinux']
+
+        rows = [self._get_headers()]
+        for param in key_params:
+            values = []
+            for cfg in self.configs:
+                cmdline = cfg.cmdline
+                if cmdline and cmdline != 'NA':
+                    found = 'NOT SET'
+                    for token in cmdline.split():
+                        if token.startswith(param + '=') or token == param:
+                            found = token
+                            break
+                    values.append(found)
+                else:
+                    values.append('NA')
+            if any(v != 'NOT SET' and v != 'NA' for v in values):
+                diff = self._compare_values(values)
+                rows.append([param] + values + [diff])
+
+        if len(rows) > 1:
+            lines.append("**关键参数对比**:")
+            lines.append("")
+            lines.append(self._format_table(rows))
+
+        return '\n'.join(lines)
+
+    # ========== 系统服务对比 ==========
+    def _compare_system_services(self) -> str:
+        """对比系统服务状态"""
+        all_services = set()
+        for cfg in self.configs:
+            all_services.update(cfg.system_services.keys())
+
+        if not all_services:
+            return "无法获取系统服务状态"
+
+        rows = [self._get_headers()]
+
+        for service in sorted(all_services):
+            values = [cfg.system_services.get(service, 'NA') for cfg in self.configs]
+            diff = self._compare_values(values)
+            rows.append([service] + values + [diff])
+
+        return self._format_table(rows)
+
+    # ========== Swap 配置对比 ==========
+    def _compare_swap_config(self) -> str:
+        """对比 Swap 配置"""
+        rows = [self._get_headers()]
+
+        swap_counts = [str(self._get_value(cfg, 'swap_config.swap_count')) for cfg in self.configs]
+        rows.append(['Swap 设备数'] + swap_counts + [self._compare_values(swap_counts)])
+
+        # Total swap size
+        swap_sizes = []
+        for cfg in self.configs:
+            devices = self._get_value(cfg, 'swap_config.devices')
+            if isinstance(devices, list):
+                total = 0
+                for d in devices:
+                    if isinstance(d, dict) and 'size' in d:
+                        try:
+                            total += int(d['size'].rstrip('GMBK'))
+                        except ValueError:
+                            pass
+                swap_sizes.append(f"{total} G" if total > 0 else 'NA')
+            else:
+                swap_sizes.append('NA')
+        rows.append(['Swap 总大小'] + swap_sizes + [self._compare_values(swap_sizes)])
+
+        return self._format_table(rows)
+
     def _analyze_performance_impact(self) -> str:
         """分析性能影响"""
         lines = []
@@ -822,6 +1007,69 @@ class PerfComparator:
         if len(valid_open_files) >= 2 and valid_open_files[0] != valid_open_files[1]:
             lines.append(f"{item_num}. **文件描述符限制差异**: {', '.join(valid_open_files)}")
             lines.append("   - 较低的 open files 限制可能限制高并发应用")
+            lines.append("")
+            item_num += 1
+
+        # 分析 CPU 频率调节器差异
+        governors = [self._get_value(cfg, 'cpu_freq.governor') for cfg in self.configs]
+        valid_govs = [g for g in governors if g != 'NA']
+        if len(valid_govs) >= 2 and valid_govs[0] != valid_govs[1]:
+            lines.append(f"{item_num}. **CPU 频率调节器差异**: {', '.join(valid_govs)}")
+            lines.append("   - performance: CPU 锁定最高频率，适合延迟敏感负载")
+            lines.append("   - ondemand/schedutil: 按需调频，兼顾功耗与性能")
+            lines.append("   - 不同的 governor 可能导致显著的性能差异（5-20%）")
+            lines.append("")
+            item_num += 1
+
+        # 分析 CPU 漏洞缓解差异
+        miti_statuses = []
+        for cfg in self.configs:
+            miti = cfg.cpu_vulnerabilities.get('spec_store_bypass',
+                     cfg.cpu_vulnerabilities.get('spectre_v2',
+                     cfg.cpu_vulnerabilities.get('meltdown', '')))
+            miti_statuses.append(miti if miti else 'NA')
+        if len(set(miti_statuses)) > 1:
+            lines.append(f"{item_num}. **CPU 漏洞缓解差异**: {', '.join(miti_statuses)}")
+            lines.append("   - 开启缓解（如 `Mitigation: ...`）可能降低 3-15% 性能")
+            lines.append("   - 关闭缓解可获得更高性能但降低安全性")
+            lines.append("")
+            item_num += 1
+
+        # 分析 THP defrag
+        thp_defrags = [self._get_value(cfg, 'thp_details.defrag') for cfg in self.configs]
+        valid_defrags = [d for d in thp_defrags if d != 'NA']
+        if len(valid_defrags) >= 2 and valid_defrags[0] != valid_defrags[1]:
+            lines.append(f"{item_num}. **透明大页 defrag 差异**: {', '.join(valid_defrags)}")
+            lines.append("   - always: 积极整理大页碎片，可能引入延迟抖动")
+            lines.append("   - madvise: 仅在应用主动请求时整理，更可控")
+            lines.append("   - defer: 延迟整理，适合较大的内存负载")
+            lines.append("")
+            item_num += 1
+
+        # 分析 tuned 服务
+        tuned_statuses = [cfg.system_services.get('tuned', 'NA') for cfg in self.configs]
+        valid_tuned = [t for t in tuned_statuses if t != 'NA' and 'not installed' not in t]
+        if len(set(valid_tuned)) > 1:
+            lines.append(f"{item_num}. **tuned 性能策略差异**:")
+            for cfg, status in zip(self.configs, tuned_statuses):
+                lines.append(f"   - {cfg.display_name}: {status}")
+            lines.append("   - tuned 策略控制多种内核参数，不同策略会导致性能差异")
+            lines.append("")
+            item_num += 1
+
+        # 分析内核启动参数 mitigations
+        mitigation_cmdlines = []
+        for cfg in self.configs:
+            cmdline = cfg.cmdline
+            if cmdline and cmdline != 'NA':
+                has_mitigations = 'mitigations=off' in cmdline
+                mitigation_cmdlines.append('off' if has_mitigations else 'on (default)')
+            else:
+                mitigation_cmdlines.append('NA')
+        if len(set(mitigation_cmdlines)) > 1:
+            lines.append(f"{item_num}. **内核 mitigations 参数差异**: {', '.join(mitigation_cmdlines)}")
+            lines.append("   - mitigations=off 可提升性能（5-30%），但禁用 CPU 安全缓解")
+            lines.append("   - 默认开启所有缓解措施以保证安全性")
             lines.append("")
             item_num += 1
 

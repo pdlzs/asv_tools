@@ -26,11 +26,17 @@ class PerfConfig:
     machine: Dict[str, Any]
     bios: Dict[str, Any]               # 解析后的 BIOS 信息（包含原始输出和解析字段）
     cpu: Dict[str, Any]
+    cpu_freq: Dict[str, Any]           # CPU 频率调节器/驱动信息
+    cpu_vulnerabilities: Dict[str, str]  # CPU 漏洞缓解状态
     memory: Dict[str, Any]
+    thp_details: Dict[str, str]         # 透明大页详细配置 (defrag, shmem_enabled)
     kernel_params: Dict[str, Any]
+    cmdline: str                        # 内核启动参数 (/proc/cmdline)
     environment: Dict[str, str]        # python/blas/lapack/gcc
     env_vars: Dict[str, str]           # 性能相关环境变量
     limits: Dict[str, Any]
+    system_services: Dict[str, str]     # 系统服务状态 (irqbalance, tuned)
+    swap_config: Dict[str, Any]         # Swap 配置
     collect_time: str = ""
 
 
@@ -61,11 +67,41 @@ lscpu 2>&1 || echo 'NA: lscpu 不可用'
 # ARM架构的指令集在 /proc/cpuinfo 的 Features 字段
 cat /proc/cpuinfo 2>/dev/null | grep -E '^(model name|Model|Features|flags)' | head -5 || echo 'NA: /proc/cpuinfo 不可用'
 
+echo '=== CPU_FREQ ==='
+for cpu in /sys/devices/system/cpu/cpu*/cpufreq; do
+    if [ -d "$cpu" ]; then
+        cpu_name=$(basename $(dirname "$cpu"))
+        echo "CPU: $cpu_name"
+        echo "driver: $(cat $cpu/scaling_driver 2>/dev/null || echo 'NA')"
+        echo "governor: $(cat $cpu/scaling_governor 2>/dev/null || echo 'NA')"
+        echo "available_governors: $(cat $cpu/scaling_available_governors 2>/dev/null | tr ' ' ',' || echo 'NA')"
+        echo "---"
+    fi
+done
+if ! ls /sys/devices/system/cpu/cpu*/cpufreq >/dev/null 2>&1; then
+    echo "NA: cpufreq sysfs interface not available"
+fi
+
+echo '=== CPU_VULNERABILITIES ==='
+for vuln in /sys/devices/system/cpu/vulnerabilities/*; do
+    if [ -f "$vuln" ]; then
+        name=$(basename "$vuln")
+        echo "$name: $(cat "$vuln" 2>/dev/null || echo 'NA')"
+    fi
+done
+if ! ls /sys/devices/system/cpu/vulnerabilities/* >/dev/null 2>&1; then
+    echo "NA: vulnerabilities sysfs interface not available"
+fi
+
 echo '=== MEMORY_INFO ==='
 free -h 2>&1 || echo 'NA: free 不可用'
 cat /sys/kernel/mm/transparent_hugepage/enabled 2>&1 || echo 'NA: 透明大页配置不可用'
 cat /proc/meminfo 2>&1 | grep -i huge || echo 'NA: 大页配置不可用'
 numactl --hardware 2>&1 || echo 'NA: numactl 不可用或无 NUMA 配置'
+
+echo '=== THP_DETAILS ==='
+cat /sys/kernel/mm/transparent_hugepage/defrag 2>/dev/null || echo 'NA: THP defrag not available'
+cat /sys/kernel/mm/transparent_hugepage/shmem_enabled 2>/dev/null || echo 'NA: THP shmem not available'
 
 echo '=== PYTHON_VERSION ==='
 python --version 2>&1 || echo 'NA: Python 不可用'
@@ -83,10 +119,20 @@ echo '=== ENV_VARS ==='
 env | grep -E '^(OMP|MKL|OPENBLAS|NUMEXPR|BLIS|KMP|VECLIB)' 2>&1 || echo 'NA: 无性能相关环境变量'
 
 echo '=== KERNEL_PARAMS ==='
-sysctl vm.swappiness vm.dirty_ratio vm.dirty_background_ratio kernel.shmmax kernel.shmall kernel.sched_autogroup_enabled 2>&1 || echo 'NA: sysctl 不可用'
+sysctl vm.swappiness vm.dirty_ratio vm.dirty_background_ratio vm.zone_reclaim_mode vm.min_free_kbytes kernel.shmmax kernel.shmall kernel.sched_autogroup_enabled kernel.numa_balancing kernel.randomize_va_space 2>&1 || echo 'NA: sysctl 不可用'
+
+echo '=== KERNEL_CMDLINE ==='
+cat /proc/cmdline 2>/dev/null || echo 'NA: /proc/cmdline not available'
 
 echo '=== LIMITS ==='
 ulimit -a 2>&1 || echo 'NA: ulimit 不可用'
+
+echo '=== SYSTEM_SERVICES ==='
+irqbalance_status=$(systemctl is-active irqbalance 2>/dev/null); echo "irqbalance: ${{irqbalance_status:-NA: not installed}}"
+tuned_status=$(tuned-adm active 2>/dev/null); echo "tuned: ${{tuned_status:-NA: not installed}}"
+
+echo '=== SWAP_CONFIG ==='
+swapon --show 2>/dev/null || echo 'NA: no swap or swapon not available'
 
 echo '=== COLLECT_DONE ==='
 """
@@ -176,8 +222,12 @@ echo '=== COLLECT_DONE ==='
             machine=self._parse_machine_info(sections.get('MACHINE_INFO', 'NA')),
             bios=bios_info,
             cpu=self._parse_cpu_info(sections.get('CPU_INFO', 'NA')),
+            cpu_freq=self._parse_cpu_freq_info(sections.get('CPU_FREQ', 'NA')),
+            cpu_vulnerabilities=self._parse_cpu_vulnerabilities(sections.get('CPU_VULNERABILITIES', 'NA')),
             memory=self._parse_memory_info(sections.get('MEMORY_INFO', 'NA')),
+            thp_details=self._parse_thp_details(sections.get('THP_DETAILS', 'NA')),
             kernel_params=self._parse_kernel_params(sections.get('KERNEL_PARAMS', 'NA')),
+            cmdline=self._parse_cmdline(sections.get('KERNEL_CMDLINE', 'NA')),
             environment={
                 'python': self._parse_version(sections.get('PYTHON_VERSION', 'NA')),
                 'gcc': self._parse_version(sections.get('GCC_VERSION', 'NA')),
@@ -186,6 +236,8 @@ echo '=== COLLECT_DONE ==='
             },
             env_vars=self._parse_env_vars(sections.get('ENV_VARS', 'NA')),
             limits=self._parse_limits(sections.get('LIMITS', 'NA')),
+            system_services=self._parse_system_services(sections.get('SYSTEM_SERVICES', 'NA')),
+            swap_config=self._parse_swap_config(sections.get('SWAP_CONFIG', 'NA')),
             collect_time=collect_time
         )
 
@@ -761,6 +813,136 @@ echo '=== COLLECT_DONE ==='
                         limits[name] = value
         return limits
 
+    def _parse_cpu_freq_info(self, raw: str) -> Dict[str, Any]:
+        """解析 CPU 频率调节器信息"""
+        info: Dict[str, Any] = {'raw': raw}
+        if raw == 'NA' or raw.startswith('NA:'):
+            return info
+
+        per_cpu: Dict[str, Dict[str, str]] = {}
+        current_cpu = None
+        current_data: Dict[str, str] = {}
+
+        for line in raw.split('\n'):
+            line = line.strip()
+            if line.startswith('CPU:'):
+                if current_cpu and current_data:
+                    per_cpu[current_cpu] = current_data
+                current_cpu = line.split(':', 1)[0].strip() + ':' + line.split(':', 1)[1].strip()
+                # Normalize key: "CPU: cpu0" -> "cpu0"
+                current_cpu = line.split(':', 1)[1].strip()
+                current_data = {}
+            elif line == '---':
+                if current_cpu and current_data:
+                    per_cpu[current_cpu] = current_data
+                current_cpu = None
+                current_data = {}
+            elif ':' in line and current_cpu is not None:
+                key, value = line.split(':', 1)
+                current_data[key.strip()] = value.strip()
+
+        # Save last entry if no trailing ---
+        if current_cpu and current_data:
+            per_cpu[current_cpu] = current_data
+
+        info['per_cpu'] = per_cpu
+
+        # Extract representative values from first CPU
+        if per_cpu:
+            first_cpu = list(per_cpu.values())[0]
+            info['driver'] = first_cpu.get('driver', 'NA')
+            info['governor'] = first_cpu.get('governor', 'NA')
+            govs = first_cpu.get('available_governors', '')
+            info['available_governors'] = [g.strip() for g in govs.split(',')] if govs and govs != 'NA' else []
+
+        return info
+
+    def _parse_cpu_vulnerabilities(self, raw: str) -> Dict[str, str]:
+        """解析 CPU 漏洞缓解状态"""
+        if raw == 'NA' or raw.startswith('NA:'):
+            return {}
+        vulns: Dict[str, str] = {}
+        for line in raw.split('\n'):
+            line = line.strip()
+            if ':' in line and not line.startswith('NA:'):
+                key, value = line.split(':', 1)
+                vulns[key.strip()] = value.strip()
+        return vulns
+
+    def _parse_thp_details(self, raw: str) -> Dict[str, str]:
+        """解析透明大页详细配置 (defrag, shmem_enabled)"""
+        info: Dict[str, str] = {'raw': raw}
+        if raw == 'NA' or raw.startswith('NA:'):
+            return info
+
+        lines = raw.split('\n')
+        # First line is defrag, second is shmem_enabled
+        for line in lines:
+            line = line.strip()
+            if not line or line.startswith('NA:'):
+                continue
+            # Extract bracketed active value: [always] madvise never
+            match = re.search(r'\[(\w+)\]', line)
+            if match:
+                if 'defrag' not in info:
+                    info['defrag'] = match.group(1)
+                else:
+                    info['shmem_enabled'] = match.group(1)
+
+        # If no bracketed value found, store raw
+        if 'defrag' not in info:
+            info['defrag'] = 'NA'
+        if 'shmem_enabled' not in info:
+            info['shmem_enabled'] = 'NA'
+
+        return info
+
+    def _parse_cmdline(self, raw: str) -> str:
+        """解析内核启动参数"""
+        if raw == 'NA' or raw.startswith('NA:'):
+            return 'NA'
+        return raw.strip()
+
+    def _parse_system_services(self, raw: str) -> Dict[str, str]:
+        """解析系统服务状态"""
+        if raw == 'NA' or raw.startswith('NA:'):
+            return {}
+        services: Dict[str, str] = {}
+        for line in raw.split('\n'):
+            line = line.strip()
+            if ':' in line:
+                key, value = line.split(':', 1)
+                services[key.strip()] = value.strip()
+        return services
+
+    def _parse_swap_config(self, raw: str) -> Dict[str, Any]:
+        """解析 swap 配置 (swapon --show)"""
+        info: Dict[str, Any] = {'raw': raw}
+        if raw == 'NA' or raw.startswith('NA:'):
+            return info
+
+        lines = raw.strip().split('\n')
+        if len(lines) < 2:
+            info['devices'] = []
+            return info
+
+        # Parse header
+        headers = [h.strip() for h in lines[0].split()]
+        devices = []
+        for line in lines[1:]:
+            if not line.strip():
+                continue
+            values = line.split()
+            device: Dict[str, str] = {}
+            for i, header in enumerate(headers):
+                if i < len(values):
+                    device[header.lower()] = values[i]
+            devices.append(device)
+
+        info['devices'] = devices
+        info['swap_count'] = len(devices)
+        return info
+
     def _create_empty_config(self, error_msg: str) -> PerfConfig:
         """创建空配置（用于失败情况）"""
         return PerfConfig(
@@ -770,11 +952,17 @@ echo '=== COLLECT_DONE ==='
             machine={'error': error_msg},
             bios={'processor': {'error': error_msg}, 'memory': {'error': error_msg}, 'system': {'error': error_msg}},
             cpu={'error': error_msg},
+            cpu_freq={'error': error_msg},
+            cpu_vulnerabilities={},
             memory={'error': error_msg},
+            thp_details={'error': error_msg},
             kernel_params={'error': error_msg},
+            cmdline='NA',
             environment={'python': 'NA', 'gcc': 'NA', 'blas': 'NA', 'lapack': 'NA'},
             env_vars={},
             limits={'error': error_msg},
+            system_services={},
+            swap_config={'error': error_msg},
             collect_time=""
         )
 
@@ -795,11 +983,17 @@ def perf_config_to_yaml(config: PerfConfig) -> str:
         'machine': config.machine,
         'bios': config.bios,
         'cpu': config.cpu,
+        'cpu_freq': config.cpu_freq,
+        'cpu_vulnerabilities': config.cpu_vulnerabilities,
         'memory': config.memory,
+        'thp_details': config.thp_details,
         'kernel_params': config.kernel_params,
+        'cmdline': config.cmdline,
         'environment': config.environment,
         'env_vars': config.env_vars,
         'limits': config.limits,
+        'system_services': config.system_services,
+        'swap_config': config.swap_config,
     }
 
     return yaml.dump(data, default_flow_style=False, allow_unicode=True, sort_keys=False)
