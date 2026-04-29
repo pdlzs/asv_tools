@@ -1,10 +1,10 @@
 """Performance configuration comparator
 
 Compares performance configurations from multiple machines and generates
-Markdown comparison reports.
+Markdown comparison reports with comprehensive performance-related metrics.
 """
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from core.perf_collector import PerfConfig
 
 
@@ -26,37 +26,52 @@ class PerfComparator:
         lines.append(f"**采集时间**: {self._get_collect_times()}")
         lines.append("")
 
-        # CPU 对比
+        # 1. 系统/架构对比（新增）
+        lines.append("## 系统架构对比")
+        lines.append("")
+        lines.append(self._compare_machine())
+
+        # 2. CPU 对比（增强）
         lines.append("## CPU 对比")
         lines.append("")
         lines.append(self._compare_cpu())
 
-        # 内存对比
+        # 3. NUMA 配置对比（新增详细）
+        lines.append("## NUMA 配置对比")
+        lines.append("")
+        lines.append(self._compare_numa())
+
+        # 4. 内存对比（增强）
         lines.append("## 内存对比")
         lines.append("")
         lines.append(self._compare_memory())
 
-        # 环境对比
+        # 5. 环境对比
         lines.append("## 环境对比")
         lines.append("")
         lines.append(self._compare_environment())
 
-        # 环境变量对比
+        # 6. 环境变量对比
         lines.append("## 环境变量对比")
         lines.append("")
         lines.append(self._compare_env_vars())
 
-        # 内核参数对比
+        # 7. 内核参数对比
         lines.append("## 内核参数对比")
         lines.append("")
         lines.append(self._compare_kernel_params())
 
-        # BIOS 配置对比（仅简要对比关键信息）
+        # 8. 系统限制对比（新增）
+        lines.append("## 系统限制对比 (ulimit)")
+        lines.append("")
+        lines.append(self._compare_limits())
+
+        # 9. BIOS 配置对比（精简关键信息）
         lines.append("## BIOS 配置")
         lines.append("")
         lines.append(self._compare_bios())
 
-        # 性能影响分析
+        # 10. 性能影响分析
         lines.append("## 性能影响分析")
         lines.append("")
         lines.append(self._analyze_performance_impact())
@@ -82,22 +97,20 @@ class PerfComparator:
         if not rows:
             return ""
 
-        # 第一行是表头
         header = rows[0]
         separator = '|' + '|'.join(['---' for _ in header]) + '|'
 
         lines = []
-        lines.append('|' + '|'.join(header) + '|')
+        lines.append('|' + '|'.join([str(h) for h in header]) + '|')
         lines.append(separator)
 
         for row in rows[1:]:
-            lines.append('|' + '|'.join(row) + '|')
+            lines.append('|' + '|'.join([str(item) for item in row]) + '|')
 
         return '\n'.join(lines)
 
     def _compare_values(self, values: List[str]) -> str:
         """对比多个值，返回差异标记"""
-        # 过滤掉 NA
         valid_values = [v for v in values if v and v != 'NA' and not v.startswith('NA:')]
 
         if len(valid_values) < 2:
@@ -131,7 +144,6 @@ class PerfComparator:
 
         if val is None:
             return 'NA'
-        # 保持列表类型不变，用于后续显示处理
         if isinstance(val, list):
             return val
         if isinstance(val, dict):
@@ -148,6 +160,26 @@ class PerfComparator:
             return 'NA'
         return str(val)
 
+    # ========== 新增：系统架构对比 ==========
+    def _compare_machine(self) -> str:
+        """对比系统架构信息"""
+        rows = [self._get_headers()]
+
+        compare_fields = [
+            ('架构', 'machine.architecture'),
+            ('操作系统', 'machine.os'),
+            ('内核版本', 'machine.kernel'),
+            ('虚拟化类型', 'machine.virtualization'),
+        ]
+
+        for label, path in compare_fields:
+            values = [self._get_value(cfg, path) for cfg in self.configs]
+            diff = self._compare_values(values)
+            rows.append([label] + values + [diff])
+
+        return self._format_table(rows)
+
+    # ========== CPU 对比（增强） ==========
     def _compare_cpu(self) -> str:
         """对比 CPU 信息"""
         rows = [self._get_headers()]
@@ -158,9 +190,15 @@ class PerfComparator:
             ('物理核心', 'cpu.physical_cores'),
             ('逻辑核心', 'cpu.logical_cores'),
             ('线程/核心', 'cpu.threads_per_core'),
+            ('Socket 数', 'cpu.sockets'),
             ('当前频率', None),  # 特殊处理：使用 dmidecode current_speed
             ('最大频率', 'cpu.max_mhz'),
+            ('最小频率', 'cpu.min_mhz'),
+            ('频率 Boost', None),  # 特殊处理：从 raw 解析
+            ('BogoMIPS', None),  # 特殊处理：从 raw 解析
+            ('虚拟化支持', None),  # 特殊处理：从 raw 解析
             ('L1d 缓存', 'cpu.l1d_cache'),
+            ('L1i 缓存', 'cpu.l1i_cache'),
             ('L2 缓存', 'cpu.l2_cache'),
             ('L3 缓存', 'cpu.l3_cache'),
             ('NUMA 节点', 'cpu.numa_nodes'),
@@ -172,6 +210,12 @@ class PerfComparator:
                 values = [self._get_cpu_model_from_dmidecode(cfg) for cfg in self.configs]
             elif label == '当前频率':
                 values = [self._get_current_freq_from_dmidecode(cfg) for cfg in self.configs]
+            elif label == '频率 Boost':
+                values = [self._get_freq_boost_from_cpu(cfg) for cfg in self.configs]
+            elif label == 'BogoMIPS':
+                values = [self._get_bogomips_from_cpu(cfg) for cfg in self.configs]
+            elif label == '虚拟化支持':
+                values = [self._get_virtualization_from_cpu(cfg) for cfg in self.configs]
             else:
                 values = [self._get_value(cfg, path) for cfg in self.configs]
             diff = self._compare_values([self._format_value_for_display(v) for v in values])
@@ -210,6 +254,194 @@ class PerfComparator:
             return f"{lscpu_freq} MHz"
         return 'NA'
 
+    def _get_freq_boost_from_cpu(self, config: PerfConfig) -> str:
+        """从 lscpu raw 解析频率 boost 状态"""
+        cpu_raw = self._get_value(config, 'cpu.raw')
+        if cpu_raw and cpu_raw != 'NA':
+            if 'Frequency boost: enabled' in cpu_raw or 'Frequency boost:                      enabled' in cpu_raw:
+                return 'enabled'
+            elif 'Frequency boost: disabled' in cpu_raw or 'Frequency boost:                      disabled' in cpu_raw:
+                return 'disabled'
+        return 'NA'
+
+    def _get_bogomips_from_cpu(self, config: PerfConfig) -> str:
+        """从 lscpu raw 解析 BogoMIPS"""
+        cpu_raw = self._get_value(config, 'cpu.raw')
+        if cpu_raw and cpu_raw != 'NA':
+            import re
+            match = re.search(r'BogoMIPS:\s+([\d.]+)', cpu_raw)
+            if match:
+                return match.group(1)
+        return 'NA'
+
+    def _get_virtualization_from_cpu(self, config: PerfConfig) -> str:
+        """从 lscpu raw 解析虚拟化支持"""
+        cpu_raw = self._get_value(config, 'cpu.raw')
+        if cpu_raw and cpu_raw != 'NA':
+            if 'Virtualization:                       AMD-V' in cpu_raw:
+                return 'AMD-V'
+            elif 'Virtualization:' in cpu_raw:
+                import re
+                match = re.search(r'Virtualization:\s+(\S+)', cpu_raw)
+                if match:
+                    return match.group(1)
+        return 'NA'
+
+    # ========== 新增：NUMA 配置对比（详细） ==========
+    def _compare_numa(self) -> str:
+        """对比 NUMA 详细配置"""
+        lines = []
+
+        # 1. NUMA 节点概览
+        lines.append("### NUMA 节点概览")
+        lines.append("")
+        rows = [self._get_headers()]
+        numa_nodes_values = [self._get_value(cfg, 'cpu.numa_nodes') for cfg in self.configs]
+        rows.append(['NUMA 节点数'] + numa_nodes_values + [self._compare_values(numa_nodes_values)])
+
+        # 获取各节点内存大小并计算总内存
+        numa_totals = []
+        for cfg in self.configs:
+            numa_sizes = self._get_numa_memory_sizes(cfg)
+            total_mem = sum(numa_sizes.values())
+            numa_totals.append(f"{total_mem} MB ({total_mem//1024} GB)")
+        rows.append(['NUMA 总内存'] + numa_totals + [self._compare_values(numa_totals)])
+
+        lines.append(self._format_table(rows))
+        lines.append("")
+
+        # 2. 各 NUMA 节点详情
+        lines.append("### 各 NUMA 节点内存配置")
+        lines.append("")
+        numa_details = [self._get_numa_details(cfg) for cfg in self.configs]
+        max_nodes = max(len(d) for d in numa_details)
+
+        rows = [['NUMA 节点'] + [cfg.display_name for cfg in self.configs] + ['对比']]
+        for i in range(max_nodes):
+            node_label = f"Node {i}"
+            values = []
+            for d in numa_details:
+                if i in d:
+                    values.append(f"{d[i]['size']} MB ({d[i]['size']//1024} GB)")
+                else:
+                    values.append('NA')
+            diff = self._compare_values(values)
+            rows.append([node_label] + values + [diff])
+
+        lines.append(self._format_table(rows))
+        lines.append("")
+
+        # 3. NUMA 节点距离矩阵
+        lines.append("### NUMA 节点距离矩阵")
+        lines.append("")
+        for cfg in self.configs:
+            distances = self._get_numa_distances(cfg)
+            if distances:
+                lines.append(f"**{cfg.display_name}**:")
+                lines.append("")
+                lines.append(self._format_numa_distance_table(distances))
+                lines.append("")
+
+        return '\n'.join(lines)
+
+    def _get_numa_memory_sizes(self, config: PerfConfig) -> Dict[int, int]:
+        """从 memory.raw 解析各 NUMA 节点内存大小"""
+        memory_raw = self._get_value(config, 'memory.raw')
+        if memory_raw and memory_raw != 'NA':
+            import re
+            sizes = {}
+            pattern = r'node (\d+) size: (\d+) MB'
+            matches = re.findall(pattern, memory_raw)
+            for node, size in matches:
+                sizes[int(node)] = int(size)
+            return sizes
+        return {}
+
+    def _get_numa_details(self, config: PerfConfig) -> Dict[int, Dict[str, Any]]:
+        """获取 NUMA 节点详细信息"""
+        memory_raw = self._get_value(config, 'memory.raw')
+        cpu_raw = self._get_value(config, 'cpu.raw')
+        details = {}
+
+        if memory_raw and memory_raw != 'NA':
+            import re
+            # 解析内存大小
+            size_pattern = r'node (\d+) size: (\d+) MB'
+            for node, size in re.findall(size_pattern, memory_raw):
+                node_id = int(node)
+                if node_id not in details:
+                    details[node_id] = {}
+                details[node_id]['size'] = int(size)
+
+            # 解析空闲内存
+            free_pattern = r'node (\d+) free: (\d+) MB'
+            for node, free in re.findall(free_pattern, memory_raw):
+                node_id = int(node)
+                if node_id not in details:
+                    details[node_id] = {}
+                details[node_id]['free'] = int(free)
+
+        # 解析 CPU 分布
+        if cpu_raw and cpu_raw != 'NA':
+            import re
+            # 修复正则表达式，匹配 CPU 范围如 "0-23" 或 "0 1 2 3" 等
+            cpu_pattern = r'NUMA node(\d+) CPU\(s\):\s+([0-9,\s\-]+)'
+            for node, cpus in re.findall(cpu_pattern, cpu_raw):
+                node_id = int(node)
+                if node_id not in details:
+                    details[node_id] = {}
+                # 简化显示 CPU 范围
+                cpu_list = cpus.strip()
+                if len(cpu_list) > 30:
+                    cpu_list = cpu_list[:30] + '...'
+                details[node_id]['cpus'] = cpu_list
+
+        return details
+
+    def _get_numa_distances(self, config: PerfConfig) -> Optional[List[List[int]]]:
+        """从 memory.raw 解析 NUMA 节点距离矩阵"""
+        memory_raw = self._get_value(config, 'memory.raw')
+        if memory_raw and memory_raw != 'NA':
+            import re
+            # 找到距离矩阵部分
+            if 'node distances:' in memory_raw:
+                lines = memory_raw.split('\n')
+                start_idx = None
+                for i, line in enumerate(lines):
+                    if 'node distances:' in line:
+                        start_idx = i + 1
+                        break
+                if start_idx:
+                    distances = []
+                    for i in range(start_idx, len(lines)):
+                        line = lines[i].strip()
+                        if line.startswith('  ') and ':' in line:
+                            parts = line.split(':')[1].strip().split()
+                            try:
+                                row = [int(x) for x in parts]
+                                distances.append(row)
+                            except:
+                                pass
+                        elif not line.startswith('  ') and distances:
+                            break
+                    return distances
+        return None
+
+    def _format_numa_distance_table(self, distances: List[List[int]]) -> str:
+        """格式化 NUMA 节点距离表格"""
+        if not distances:
+            return "NA"
+
+        n = len(distances)
+        header = ['Node'] + [str(i) for i in range(n)]
+        rows = [header]
+
+        for i, row in enumerate(distances):
+            rows.append([str(i)] + [str(x) for x in row])
+
+        return self._format_table(rows)
+
+    # ========== 内存对比（增强） ==========
     def _compare_memory(self) -> str:
         """对比内存信息"""
         rows = [self._get_headers()]
@@ -218,6 +450,7 @@ class PerfComparator:
             ('总内存', 'memory.total'),
             ('透明大页', 'memory.transparent_hugepage'),
             ('大页总数', 'memory.hugepages_total'),
+            ('大页空闲数', 'memory.hugepages_free'),
             ('大页大小', 'memory.hugepage_size'),
         ]
 
@@ -225,6 +458,21 @@ class PerfComparator:
             values = [self._get_value(cfg, path) for cfg in self.configs]
             diff = self._compare_values(values)
             rows.append([label] + values + [diff])
+
+        # 计算大页总容量（所有机器）
+        hugepage_totals = []
+        for cfg in self.configs:
+            hugepages_total = self._get_value(cfg, 'memory.hugepages_total')
+            hugepage_size = self._get_value(cfg, 'memory.hugepage_size')
+            if hugepages_total != 'NA' and hugepage_size != 'NA':
+                try:
+                    total_huge_mb = int(hugepages_total) * int(hugepage_size.replace(' kB', '')) // 1024
+                    hugepage_totals.append(f"{total_huge_mb} MB ({total_huge_mb//1024} GB)")
+                except:
+                    hugepage_totals.append('NA')
+            else:
+                hugepage_totals.append('NA')
+        rows.append(['大页总容量'] + hugepage_totals + [self._compare_values(hugepage_totals)])
 
         return self._format_table(rows)
 
@@ -248,7 +496,6 @@ class PerfComparator:
 
     def _compare_env_vars(self) -> str:
         """对比环境变量"""
-        # 收集所有出现的环境变量
         all_vars = set()
         for cfg in self.configs:
             all_vars.update(cfg.env_vars.keys())
@@ -258,7 +505,6 @@ class PerfComparator:
 
         rows = [self._get_headers()]
 
-        # 按重要性排序
         priority_vars = ['OMP_NUM_THREADS', 'MKL_NUM_THREADS', 'OPENBLAS_NUM_THREADS',
                         'NUMEXPR_NUM_THREADS', 'BLIS_NUM_THREADS', 'KMP_AFFINITY']
         sorted_vars = [v for v in priority_vars if v in all_vars] + \
@@ -273,7 +519,6 @@ class PerfComparator:
 
     def _compare_kernel_params(self) -> str:
         """对比内核参数"""
-        # 收集所有出现的参数
         all_params = set()
         for cfg in self.configs:
             all_params.update(cfg.kernel_params.keys())
@@ -290,6 +535,32 @@ class PerfComparator:
 
         return self._format_table(rows)
 
+    # ========== 新增：系统限制对比 ==========
+    def _compare_limits(self) -> str:
+        """对比系统限制 (ulimit)"""
+        all_limits = set()
+        for cfg in self.configs:
+            all_limits.update(cfg.limits.keys())
+
+        if not all_limits:
+            return "无法获取系统限制"
+
+        rows = [self._get_headers()]
+
+        # 按重要性排序
+        priority_limits = ['open files', 'max user processes', 'max locked memory',
+                          'stack size', 'virtual memory', 'core file size']
+        sorted_limits = [l for l in priority_limits if l in all_limits] + \
+                       [l for l in sorted(all_limits) if l not in priority_limits]
+
+        for limit in sorted_limits:
+            values = [cfg.limits.get(limit, 'NA') for cfg in self.configs]
+            diff = self._compare_values(values)
+            rows.append([limit] + values + [diff])
+
+        return self._format_table(rows)
+
+    # ========== BIOS 配置对比（精简） ==========
     def _compare_bios(self) -> str:
         """对比 BIOS 配置，逐字段对比"""
         lines = []
@@ -298,7 +569,7 @@ class PerfComparator:
         lines.append("### 系统信息")
         lines.append("")
         rows = [self._get_headers()]
-        system_fields = ['Manufacturer', 'Product Name', 'Version', 'Serial Number', 'UUID']
+        system_fields = ['Manufacturer', 'Product Name', 'Serial Number']
         for field in system_fields:
             values = []
             for cfg in self.configs:
@@ -316,288 +587,80 @@ class PerfComparator:
         lines.append(self._format_table(rows))
         lines.append("")
 
-        # 2. CPU 处理器信息对比（详细表格）
+        # 2. CPU 处理器信息对比（精简）
         lines.append("### CPU 处理器信息")
         lines.append("")
+        rows = [['属性'] + [cfg.display_name for cfg in self.configs] + ['结论']]
 
-        # 收集所有处理器信息
-        proc_stats = []
-        for cfg in self.configs:
-            bios = cfg.bios
-            if isinstance(bios, dict) and 'processor' in bios:
-                proc_info = bios['processor']
-                if isinstance(proc_info, dict):
-                    proc_stats.append({
-                        'display_name': cfg.display_name,
-                        'handle': proc_info.get('handle', 'NA'),
-                        'dmi_type': proc_info.get('dmi_type', 'NA'),
-                        'size_bytes': proc_info.get('size_bytes', 'NA'),
-                        'socket': proc_info.get('socket', 'NA'),
-                        'type': proc_info.get('type', 'NA'),
-                        'family': proc_info.get('family', 'NA'),
-                        'manufacturer': proc_info.get('manufacturer', 'NA'),
-                        'id': proc_info.get('id', 'NA'),
-                        'signature': proc_info.get('signature', 'NA'),
-                        'version': proc_info.get('version', 'NA'),
-                        'voltage': proc_info.get('voltage', 'NA'),
-                        'external_clock': proc_info.get('external_clock', 'NA'),
-                        'max_speed': proc_info.get('max_speed', 'NA'),
-                        'current_speed': proc_info.get('current_speed', 'NA'),
-                        'core_count': proc_info.get('core_count', 'NA'),
-                        'core_enabled': proc_info.get('core_enabled', 'NA'),
-                        'thread_count': proc_info.get('thread_count', 'NA'),
-                        'key_instruction_sets': proc_info.get('key_instruction_sets', []),
-                        'flags': proc_info.get('flags', 'NA'),
-                    })
+        # 关键处理器字段
+        proc_fields = [
+            ('版本/型号', 'version', self._analyze_version_difference),
+            ('核心数', 'core_count', self._analyze_core_difference),
+            ('线程数', 'thread_count', self._analyze_thread_difference),
+            ('电压', 'voltage', self._analyze_voltage_difference),
+            ('最大速度', 'max_speed', self._analyze_speed_difference),
+            ('当前速度', 'current_speed', None),
+            ('制造商', 'manufacturer', self._analyze_manufacturer_difference),
+            ('家族', 'family', self._analyze_family_difference),
+        ]
+
+        for label, field, analyzer in proc_fields:
+            row = [label]
+            values = []
+            for cfg in self.configs:
+                bios = cfg.bios
+                if isinstance(bios, dict) and 'processor' in bios:
+                    proc_info = bios['processor']
+                    if isinstance(proc_info, dict):
+                        values.append(proc_info.get(field, 'NA'))
+                    else:
+                        values.append('NA')
                 else:
-                    proc_stats.append(self._get_empty_proc_stat(cfg.display_name))
+                    values.append('NA')
+            row.extend(values)
+            if analyzer:
+                row.append(analyzer(values))
             else:
-                proc_stats.append(self._get_empty_proc_stat(cfg.display_name))
-
-        # 构建表格
-        rows = [['属性'] + [s['display_name'] for s in proc_stats] + ['结论']]
-
-        # Handle
-        row = ['Handle']
-        for s in proc_stats:
-            row.append(s['handle'])
-        row.append('-')
-        rows.append(row)
-
-        # DMI 类型
-        row = ['DMI 类型']
-        for s in proc_stats:
-            row.append(s['dmi_type'])
-        row.append('DMI type 4 表示处理器信息')
-        rows.append(row)
-
-        # 插槽标识
-        row = ['插槽标识']
-        for s in proc_stats:
-            row.append(s['socket'])
-        row.append(self._analyze_socket_difference([s['socket'] for s in proc_stats]))
-        rows.append(row)
-
-        # 类型
-        row = ['类型']
-        for s in proc_stats:
-            row.append(s['type'])
-        row.append('-')
-        rows.append(row)
-
-        # 家族
-        row = ['家族']
-        families = [s['family'] for s in proc_stats]
-        for s in proc_stats:
-            row.append(s['family'])
-        row.append(self._analyze_family_difference(families))
-        rows.append(row)
-
-        # 制造商
-        row = ['制造商']
-        manufacturers = [s['manufacturer'] for s in proc_stats]
-        for s in proc_stats:
-            # 截断过长的制造商名
-            mfr = s['manufacturer']
-            if len(mfr) > 30:
-                row.append(mfr[:27] + '...')
-            else:
-                row.append(mfr)
-        row.append(self._analyze_manufacturer_difference(manufacturers))
-        rows.append(row)
-
-        # ID
-        row = ['ID']
-        for s in proc_stats:
-            row.append(s['id'])
-        row.append('-')
-        rows.append(row)
-
-        # 签名
-        row = ['签名']
-        for s in proc_stats:
-            row.append(s['signature'])
-        row.append('-')
-        rows.append(row)
-
-        # 版本
-        row = ['版本']
-        versions = [s['version'] for s in proc_stats]
-        for s in proc_stats:
-            row.append(s['version'])
-        row.append(self._analyze_version_difference(versions))
-        rows.append(row)
-
-        # 核心数
-        row = ['核心数']
-        core_counts = [s['core_count'] for s in proc_stats]
-        for s in proc_stats:
-            row.append(s['core_count'])
-        row.append(self._analyze_core_difference(core_counts))
-        rows.append(row)
-
-        # 线程数
-        row = ['线程数']
-        thread_counts = [s['thread_count'] for s in proc_stats]
-        for s in proc_stats:
-            row.append(s['thread_count'])
-        row.append(self._analyze_thread_difference(thread_counts))
-        rows.append(row)
-
-        # 电压
-        row = ['电压']
-        voltages = [s['voltage'] for s in proc_stats]
-        for s in proc_stats:
-            row.append(s['voltage'])
-        row.append(self._analyze_voltage_difference(voltages))
-        rows.append(row)
-
-        # 外部时钟
-        row = ['外部时钟']
-        for s in proc_stats:
-            row.append(s['external_clock'])
-        row.append('-')
-        rows.append(row)
-
-        # 最大速度
-        row = ['最大速度']
-        max_speeds = [s['max_speed'] for s in proc_stats]
-        for s in proc_stats:
-            row.append(s['max_speed'])
-        row.append(self._analyze_speed_difference(max_speeds))
-        rows.append(row)
-
-        # 当前速度
-        row = ['当前速度']
-        for s in proc_stats:
-            row.append(s['current_speed'])
-        row.append('-')
-        rows.append(row)
-
-        # 关键指令集
-        row = ['关键指令集']
-        key_isets = [s['key_instruction_sets'] for s in proc_stats]
-        for s in proc_stats:
-            if s['key_instruction_sets']:
-                row.append(', '.join(s['key_instruction_sets'][:5]))
-            else:
-                row.append('NA')
-        row.append(self._analyze_instruction_set_difference(key_isets))
-        rows.append(row)
+                row.append('-')
+            rows.append(row)
 
         lines.append(self._format_table(rows))
         lines.append("")
 
-        # 3. 内存信息对比（合并表格）
+        # 3. 内存信息对比（精简）
         lines.append("### 内存信息对比")
         lines.append("")
+        rows = [['特性'] + [cfg.display_name for cfg in self.configs] + ['结论']]
 
-        # 收集所有内存信息
-        mem_stats = []
-        for cfg in self.configs:
-            bios = cfg.bios
-            if isinstance(bios, dict) and 'memory' in bios:
-                mem_info = bios['memory']
-                if isinstance(mem_info, dict):
-                    mem_stats.append({
-                        'display_name': cfg.display_name,
-                        'smbios_version': mem_info.get('smbios_version', 'NA'),
-                        'max_capacity': mem_info.get('max_capacity', 'NA'),
-                        'num_devices': mem_info.get('num_devices', 'NA'),
-                        'ecc_type': mem_info.get('ecc_type', 'NA'),
-                        'common_size': mem_info.get('common_size', 'NA'),
-                        'common_speed': mem_info.get('common_speed', 'NA'),
-                        'common_type': mem_info.get('common_type', 'NA'),
-                        'common_part_number': mem_info.get('common_part_number', 'NA'),
-                        'size_distribution': mem_info.get('size_distribution', {}),
-                        'speed_distribution': mem_info.get('speed_distribution', {}),
-                    })
+        mem_fields = [
+            ('单条容量', 'common_size', self._analyze_size_difference),
+            ('内存速率', 'common_speed', self._analyze_speed_difference),
+            ('最大支持容量', 'max_capacity', self._analyze_max_capacity_difference),
+            ('实际内存条数', 'valid_device_count', self._analyze_device_count_difference),
+            ('SMBIOS 版本', 'smbios_version', self._analyze_smbios_difference),
+            ('内存类型', 'common_type', None),
+            ('纠错码 (ECC)', 'ecc_type', self._analyze_ecc_difference),
+        ]
+
+        for label, field, analyzer in mem_fields:
+            row = [label]
+            values = []
+            for cfg in self.configs:
+                bios = cfg.bios
+                if isinstance(bios, dict) and 'memory' in bios:
+                    mem_info = bios['memory']
+                    if isinstance(mem_info, dict):
+                        values.append(mem_info.get(field, 'NA'))
+                    else:
+                        values.append('NA')
                 else:
-                    mem_stats.append(self._get_empty_mem_stat(cfg.display_name))
+                    values.append('NA')
+            row.extend(values)
+            if analyzer:
+                row.append(analyzer(values))
             else:
-                mem_stats.append(self._get_empty_mem_stat(cfg.display_name))
-
-        # 获取 CPU 电压信息（用于对比）
-        voltages = []
-        for cfg in self.configs:
-            bios = cfg.bios
-            if isinstance(bios, dict) and 'processor' in bios:
-                proc_info = bios['processor']
-                if isinstance(proc_info, dict):
-                    voltages.append(proc_info.get('Voltage', 'NA'))
-                else:
-                    voltages.append('NA')
-            else:
-                voltages.append('NA')
-
-        # 构建表格
-        rows = [['特性'] + [s['display_name'] for s in mem_stats] + ['结论']]
-
-        # 1. 单条容量
-        row = ['单条容量']
-        sizes = [s['common_size'] for s in mem_stats]
-        for s in mem_stats:
-            if s['common_size'] != 'NA':
-                row.append(s['common_size'])
-            else:
-                row.append('NA')
-        row.append(self._analyze_size_difference(sizes))
-        rows.append(row)
-
-        # 2. 内存速率
-        row = ['内存速率']
-        speeds = [s['common_speed'] for s in mem_stats]
-        for s in mem_stats:
-            if s['common_speed'] != 'NA':
-                row.append(s['common_speed'])
-            else:
-                row.append('NA')
-        row.append(self._analyze_speed_difference(speeds))
-        rows.append(row)
-
-        # 3. 最大支持容量
-        row = ['最大支持容量']
-        max_caps = [s['max_capacity'] for s in mem_stats]
-        for s in mem_stats:
-            row.append(s['max_capacity'])
-        row.append(self._analyze_max_capacity_difference(max_caps))
-        rows.append(row)
-
-        # 4. SMBIOS 版本
-        row = ['SMBIOS 版本']
-        for s in mem_stats:
-            row.append(s['smbios_version'])
-        row.append(self._analyze_smbios_difference([s['smbios_version'] for s in mem_stats]))
-        rows.append(row)
-
-        # 5. 电压（从 CPU 处理器信息）
-        row = ['CPU 电压']
-        for v in voltages:
-            row.append(v)
-        row.append(self._analyze_voltage_difference(voltages))
-        rows.append(row)
-
-        # 6. 型号 (Part No.)
-        row = ['型号 (Part No.)']
-        for s in mem_stats:
-            if s['common_part_number'] != 'NA':
-                # 截断过长的型号
-                part = s['common_part_number']
-                if len(part) > 20:
-                    row.append(part[:17] + '...')
-                else:
-                    row.append(part)
-            else:
-                row.append('NA')
-        row.append(self._analyze_part_number_difference([s['common_part_number'] for s in mem_stats]))
-        rows.append(row)
-
-        # 7. 纠错码 (ECC)
-        row = ['纠错码 (ECC)']
-        for s in mem_stats:
-            row.append(s['ecc_type'])
-        row.append(self._analyze_ecc_difference([s['ecc_type'] for s in mem_stats]))
-        rows.append(row)
+                row.append('-')
+            rows.append(row)
 
         lines.append(self._format_table(rows))
         lines.append("")
@@ -613,44 +676,17 @@ class PerfComparator:
             lines.append(f"#### {cfg.display_name}")
             lines.append("")
             if isinstance(bios, dict):
-                # processor
-                proc_raw = bios.get('processor', {})
-                if isinstance(proc_raw, dict):
-                    raw = proc_raw.get('raw', 'NA')
-                else:
-                    raw = 'NA'
-                lines.append("**dmidecode -t processor:**")
-                lines.append("```")
-                lines.append(raw[:1000] + '...' if len(raw) > 1000 else raw)
-                lines.append("```")
-                lines.append("")
-
-                # memory
-                mem_raw = bios.get('memory', {})
-                if isinstance(mem_raw, dict):
-                    raw = mem_raw.get('raw', 'NA')
-                else:
-                    raw = 'NA'
-                lines.append("**dmidecode -t memory:**")
-                lines.append("```")
-                lines.append(raw[:1000] + '...' if len(raw) > 1000 else raw)
-                lines.append("```")
-                lines.append("")
-
-                # system
-                sys_raw = bios.get('system', {})
-                if isinstance(sys_raw, dict):
-                    raw = sys_raw.get('raw', 'NA')
-                else:
-                    raw = 'NA'
-                lines.append("**dmidecode -t system:**")
-                lines.append("```")
-                lines.append(raw[:1000] + '...' if len(raw) > 1000 else raw)
-                lines.append("```")
-                lines.append("")
-            else:
-                lines.append("dmidecode 输出: NA")
-                lines.append("")
+                for key in ['processor', 'memory', 'system']:
+                    info = bios.get(key, {})
+                    if isinstance(info, dict):
+                        raw = info.get('raw', 'NA')
+                    else:
+                        raw = 'NA'
+                    lines.append(f"**dmidecode -t {key}:**")
+                    lines.append("```")
+                    lines.append(raw[:1000] + '...' if len(raw) > 1000 else raw)
+                    lines.append("```")
+                    lines.append("")
         lines.append("</details>")
 
         return '\n'.join(lines)
@@ -661,10 +697,9 @@ class PerfComparator:
         lines.append("### 主要差异点")
         lines.append("")
 
-        # 使用动态编号
         item_num = 1
 
-        # 分析 CPU 架构差异
+        # 分析架构差异
         architectures = [self._get_value(cfg, 'cpu.architecture') for cfg in self.configs]
         if len(set(architectures)) > 1:
             lines.append(f"{item_num}. **架构差异**: {', '.join(architectures)}")
@@ -673,11 +708,80 @@ class PerfComparator:
             lines.append("")
             item_num += 1
 
+        # 分析频率 Boost 状态
+        boost_states = [self._get_freq_boost_from_cpu(cfg) for cfg in self.configs]
+        valid_boosts = [b for b in boost_states if b != 'NA']
+        if len(valid_boosts) >= 2 and valid_boosts[0] != valid_boosts[1]:
+            lines.append(f"{item_num}. **频率 Boost 状态差异**: {', '.join(valid_boosts)}")
+            lines.append("   - enabled: CPU 可动态提升频率以获得更高性能")
+            lines.append("   - disabled: CPU 固定频率运行，功耗和热量更稳定")
+            lines.append("")
+            item_num += 1
+
+        # 分析大页配置
+        hugepages = [self._get_value(cfg, 'memory.hugepages_total') for cfg in self.configs]
+        valid_hugepages = [h for h in hugepages if h != 'NA']
+        if len(valid_hugepages) >= 2 and valid_hugepages[0] != valid_hugepages[1]:
+            lines.append(f"{item_num}. **大页配置差异**: {', '.join(valid_hugepages)} 页")
+            lines.append("   - 大页可减少内存分页开销，提升内存密集型应用性能")
+            lines.append("   - 对于数据库、大数据分析等应用影响显著")
+            lines.append("")
+            item_num += 1
+
+        # 分析 NUMA 节点数
+        numa_nodes = [self._get_value(cfg, 'cpu.numa_nodes') for cfg in self.configs]
+        valid_numas = [n for n in numa_nodes if n != 'NA']
+        if len(valid_numas) >= 2 and valid_numas[0] != valid_numas[1]:
+            lines.append(f"{item_num}. **NUMA 节点数差异**: {', '.join(valid_numas)} 个节点")
+            lines.append("   - 多 NUMA 节点需注意内存绑定优化，避免跨节点访问")
+            lines.append("   - NUMA 节点数影响内存访问延迟和带宽")
+            lines.append("")
+            item_num += 1
+
+        # 分析内存条数
+        device_counts = []
+        for cfg in self.configs:
+            bios = cfg.bios
+            if isinstance(bios, dict) and 'memory' in bios:
+                mem_info = bios['memory']
+                if isinstance(mem_info, dict):
+                    device_counts.append(mem_info.get('valid_device_count', 'NA'))
+                else:
+                    device_counts.append('NA')
+            else:
+                device_counts.append('NA')
+        valid_counts = [str(c) for c in device_counts if c != 'NA']
+        if len(valid_counts) >= 2 and valid_counts[0] != valid_counts[1]:
+            lines.append(f"{item_num}. **内存条数差异**: {', '.join(valid_counts)} 条")
+            lines.append("   - 内存条数影响内存通道利用率")
+            lines.append("   - 更多内存条可提供更高的内存带宽")
+            lines.append("")
+            item_num += 1
+
+        # 分析内存速率
+        speeds = []
+        for cfg in self.configs:
+            bios = cfg.bios
+            if isinstance(bios, dict) and 'memory' in bios:
+                mem_info = bios['memory']
+                if isinstance(mem_info, dict):
+                    speeds.append(mem_info.get('common_speed', 'NA'))
+                else:
+                    speeds.append('NA')
+            else:
+                speeds.append('NA')
+        valid_speeds = [s for s in speeds if s != 'NA']
+        if len(valid_speeds) >= 2 and valid_speeds[0] != valid_speeds[1]:
+            lines.append(f"{item_num}. **内存速率差异**: {', '.join(valid_speeds)}")
+            lines.append("   - 更高内存速率可提供更高的内存带宽")
+            lines.append("")
+            item_num += 1
+
         # 分析 BLAS 库差异
         blas_versions = [self._get_value(cfg, 'environment.blas') for cfg in self.configs]
         if len(set([v for v in blas_versions if v != 'NA'])) > 1:
             lines.append(f"{item_num}. **BLAS 库差异**:")
-            for i, (cfg, blas) in enumerate(zip(self.configs, blas_versions)):
+            for cfg, blas in zip(self.configs, blas_versions):
                 lines.append(f"   - {cfg.display_name}: {blas}")
             lines.append("   - MKL 在 Intel CPU 上通常有 20-40% 矩阵运算优势")
             lines.append("   - OpenBLAS 是跨平台开源选择，ARM 平台常用")
@@ -691,16 +795,6 @@ class PerfComparator:
             diff = valid_cores[1] - valid_cores[0]
             lines.append(f"{item_num}. **核心数差异**: {valid_cores[0]} vs {valid_cores[1]} ({'+' if diff > 0 else ''}{diff})")
             lines.append("   - 核心数直接影响并行计算能力")
-            lines.append("")
-            item_num += 1
-
-        # 分析 NUMA 配置
-        numa_nodes = [self._get_value(cfg, 'cpu.numa_nodes') for cfg in self.configs]
-        if len(set([v for v in numa_nodes if v != 'NA'])) > 1:
-            lines.append(f"{item_num}. **NUMA 配置差异**:")
-            for cfg, numa in zip(self.configs, numa_nodes):
-                lines.append(f"   - {cfg.display_name}: {numa} 个节点")
-            lines.append("   - 多 NUMA 节点需注意内存绑定优化，避免跨节点访问")
             lines.append("")
             item_num += 1
 
@@ -722,83 +816,37 @@ class PerfComparator:
                 lines.append("")
                 item_num += 1
 
+        # 分析 ulimit 差异
+        open_files = [cfg.limits.get('open files', 'NA') for cfg in self.configs]
+        valid_open_files = [o for o in open_files if o != 'NA']
+        if len(valid_open_files) >= 2 and valid_open_files[0] != valid_open_files[1]:
+            lines.append(f"{item_num}. **文件描述符限制差异**: {', '.join(valid_open_files)}")
+            lines.append("   - 较低的 open files 限制可能限制高并发应用")
+            lines.append("")
+            item_num += 1
+
         if item_num == 1:
             lines.append("各机器配置基本一致，无明显性能差异因素。")
 
         return '\n'.join(lines)
 
-    def _get_empty_mem_stat(self, display_name: str) -> Dict[str, Any]:
-        """获取空的内存统计结构"""
-        return {
-            'display_name': display_name,
-            'smbios_version': 'NA',
-            'max_capacity': 'NA',
-            'num_devices': 'NA',
-            'ecc_type': 'NA',
-            'common_size': 'NA',
-            'common_speed': 'NA',
-            'common_type': 'NA',
-            'common_part_number': 'NA',
-            'size_distribution': {},
-            'speed_distribution': {},
-        }
-
+    # ========== 分析方法 ==========
     def _analyze_size_difference(self, sizes: List[str]) -> str:
         """分析单条容量差异"""
         valid_sizes = [s for s in sizes if s != 'NA']
         if len(valid_sizes) < 2:
             return '数据不完整'
-
         if all(s == valid_sizes[0] for s in valid_sizes):
             return '容量相同'
-
-        # 尝试解析容量数值进行对比
-        try:
-            size_values = []
-            for s in valid_sizes:
-                if 'GB' in s:
-                    size_values.append(int(s.replace('GB', '').strip()))
-                elif 'MB' in s:
-                    size_values.append(int(s.replace('MB', '').strip()) // 1024)
-
-            if len(size_values) >= 2:
-                ratio = size_values[0] / size_values[1]
-                if ratio > 1:
-                    return f'{self.configs[0].display_name} 单条容量是 {self.configs[1].display_name} 的 {ratio:.1f} 倍'
-                elif ratio < 1:
-                    return f'{self.configs[1].display_name} 单条容量是 {self.configs[0].display_name} 的 {1/ratio:.1f} 倍'
-        except:
-            pass
-
         return '单条容量不同'
 
     def _analyze_speed_difference(self, speeds: List[str]) -> str:
-        """分析内存速率差异"""
+        """分析速率差异"""
         valid_speeds = [s for s in speeds if s != 'NA']
         if len(valid_speeds) < 2:
             return '数据不完整'
-
         if all(s == valid_speeds[0] for s in valid_speeds):
             return '速率相同'
-
-        # 尝试解析速率数值
-        try:
-            speed_values = []
-            for s in valid_speeds:
-                if 'MT/s' in s:
-                    speed_values.append(int(s.replace('MT/s', '').strip()))
-                elif 'MHz' in s:
-                    speed_values.append(int(s.replace('MHz', '').strip()))
-
-            if len(speed_values) >= 2:
-                diff = speed_values[0] - speed_values[1]
-                if diff > 0:
-                    return f'{self.configs[0].display_name} 速度更快 (+{diff} MT/s)'
-                else:
-                    return f'{self.configs[1].display_name} 速度更快 (+{-diff} MT/s)'
-        except:
-            pass
-
         return '速率不同'
 
     def _analyze_max_capacity_difference(self, max_caps: List[str]) -> str:
@@ -806,48 +854,35 @@ class PerfComparator:
         valid_caps = [c for c in max_caps if c != 'NA']
         if len(valid_caps) < 2:
             return '数据不完整'
-
         if all(c == valid_caps[0] for c in valid_caps):
             return '扩展上限相同'
+        return '扩展上限不同'
 
-        # 尝试解析容量
+    def _analyze_device_count_difference(self, counts: List[str]) -> str:
+        """分析内存条数差异"""
+        valid_counts = [c for c in counts if c != 'NA']
+        if len(valid_counts) < 2:
+            return '数据不完整'
+        if all(c == valid_counts[0] for c in valid_counts):
+            return '内存条数相同'
         try:
-            cap_values = []
-            for c in valid_caps:
-                if 'TB' in c:
-                    cap_values.append(int(c.replace('TB', '').strip()))
-                elif 'GB' in c:
-                    cap_values.append(int(c.replace('GB', '').strip()) // 1024)
-
-            if len(cap_values) >= 2:
-                if cap_values[0] > cap_values[1]:
-                    return f'{self.configs[0].display_name} 主板扩展上限更高'
-                else:
-                    return f'{self.configs[1].display_name} 主板扩展上限更高'
+            count_values = [int(c) for c in valid_counts]
+            diff = count_values[0] - count_values[1]
+            if diff > 0:
+                return f'{self.configs[0].display_name} 多 {diff} 条'
+            else:
+                return f'{self.configs[1].display_name} 多 {-diff} 条'
         except:
             pass
-
-        return '扩展上限不同'
+        return '内存条数不同'
 
     def _analyze_smbios_difference(self, versions: List[str]) -> str:
         """分析 SMBIOS 版本差异"""
         valid_versions = [v for v in versions if v != 'NA']
         if len(valid_versions) < 2:
             return '数据不完整'
-
         if all(v == valid_versions[0] for v in valid_versions):
             return '固件版本相同'
-
-        # 版本号比较
-        try:
-            v_nums = [tuple(map(int, v.split('.'))) for v in valid_versions]
-            if v_nums[0] > v_nums[1]:
-                return f'{self.configs[0].display_name} 固件版本较新'
-            else:
-                return f'{self.configs[1].display_name} 固件版本较新'
-        except:
-            pass
-
         return '固件版本不同'
 
     def _analyze_voltage_difference(self, voltages: List[str]) -> str:
@@ -855,145 +890,21 @@ class PerfComparator:
         valid_volts = [v for v in voltages if v != 'NA']
         if len(valid_volts) < 2:
             return '数据不完整'
-
         if all(v == valid_volts[0] for v in valid_volts):
             return '电压配置相同'
-
-        # 检查是否有动态范围
-        has_range_0 = 'V' in valid_volts[0] and ('-' in valid_volts[0] or '动态' in valid_volts[0])
-        has_range_1 = 'V' in valid_volts[1] and ('-' in valid_volts[1] or '动态' in valid_volts[1])
-
-        if has_range_0 and not has_range_1:
-            return f'{self.configs[0].display_name} 支持更精细的电压调节'
-        elif has_range_1 and not has_range_0:
-            return f'{self.configs[1].display_name} 支持更精细的电压调节'
-
         return '电压配置不同'
-
-    def _analyze_part_number_difference(self, part_numbers: List[str]) -> str:
-        """分析内存型号差异"""
-        valid_parts = [p for p in part_numbers if p != 'NA']
-        if len(valid_parts) < 2:
-            return '数据不完整'
-
-        if all(p == valid_parts[0] for p in valid_parts):
-            # 检查制造商
-            return '内存型号相同'
-
-        # 提取制造商信息
-        manufacturers = []
-        for p in valid_parts:
-            if 'M3' in p:
-                manufacturers.append('三星')
-            elif 'HMA' in p:
-                manufacturers.append('海力士')
-            elif 'KVR' in p:
-                manufacturers.append('金士顿')
-
-        if len(set(manufacturers)) > 1:
-            return '不同制造商的内存规格'
-        elif manufacturers:
-            return f'相同制造商的不同规格 ({manufacturers[0]})'
-
-        return '内存型号不同'
 
     def _analyze_ecc_difference(self, ecc_types: List[str]) -> str:
         """分析 ECC 类型差异"""
         valid_eccs = [e for e in ecc_types if e != 'NA']
         if len(valid_eccs) < 2:
             return '数据不完整'
-
         if all(e == valid_eccs[0] for e in valid_eccs):
             if 'ECC' in valid_eccs[0]:
                 return '均为服务器级纠错内存'
             else:
                 return 'ECC 配置相同'
-
         return '纠错类型不同'
-
-    def _get_empty_proc_stat(self, display_name: str) -> Dict[str, Any]:
-        """获取空的处理器统计结构"""
-        return {
-            'display_name': display_name,
-            'handle': 'NA',
-            'dmi_type': 'NA',
-            'size_bytes': 'NA',
-            'socket': 'NA',
-            'type': 'NA',
-            'family': 'NA',
-            'manufacturer': 'NA',
-            'id': 'NA',
-            'signature': 'NA',
-            'version': 'NA',
-            'voltage': 'NA',
-            'external_clock': 'NA',
-            'max_speed': 'NA',
-            'current_speed': 'NA',
-            'core_count': 'NA',
-            'core_enabled': 'NA',
-            'thread_count': 'NA',
-            'key_instruction_sets': [],
-            'flags': 'NA',
-        }
-
-    def _analyze_socket_difference(self, sockets: List[str]) -> str:
-        """分析插槽标识差异"""
-        valid_sockets = [s for s in sockets if s != 'NA']
-        if len(valid_sockets) < 2:
-            return '数据不完整'
-        if all(s == valid_sockets[0] for s in valid_sockets):
-            return '插槽标识相同'
-        return '插槽标识不同'
-
-    def _analyze_family_difference(self, families: List[str]) -> str:
-        """分析 CPU 家族差异"""
-        valid_families = [f for f in families if f != 'NA']
-        if len(valid_families) < 2:
-            return '数据不完整'
-        if all(f == valid_families[0] for f in valid_families):
-            return 'CPU 家族相同'
-
-        # 判断架构类型
-        arch_info = []
-        for f in valid_families:
-            if 'Zen' in f:
-                arch_info.append('AMD Zen')
-            elif 'ARM' in f or 'Kunpeng' in f:
-                arch_info.append('ARM')
-            elif 'Intel' in f or 'Core' in f:
-                arch_info.append('Intel')
-
-        if len(set(arch_info)) > 1:
-            return '不同架构家族'
-
-        return '同架构不同世代'
-
-    def _analyze_manufacturer_difference(self, manufacturers: List[str]) -> str:
-        """分析制造商差异"""
-        valid_mfrs = [m for m in manufacturers if m != 'NA']
-        if len(valid_mfrs) < 2:
-            return '数据不完整'
-        if all(m == valid_mfrs[0] for m in valid_mfrs):
-            return '制造商相同'
-
-        # 提取简短制造商名
-        mfr_names = []
-        for m in valid_mfrs:
-            if 'AMD' in m:
-                mfr_names.append('AMD')
-            elif 'Intel' in m:
-                mfr_names.append('Intel')
-            elif 'HiSilicon' in m:
-                mfr_names.append('华为海思')
-            elif 'Advanced Micro' in m:
-                mfr_names.append('AMD')
-            else:
-                mfr_names.append(m[:20])
-
-        if len(set(mfr_names)) > 1:
-            return '不同制造商'
-
-        return '制造商相同'
 
     def _analyze_version_difference(self, versions: List[str]) -> str:
         """分析 CPU 版本差异"""
@@ -1011,8 +922,6 @@ class PerfComparator:
             return '数据不完整'
         if all(c == valid_cores[0] for c in valid_cores):
             return '核心数相同'
-
-        # 尝试解析数值
         try:
             core_values = [int(c) for c in valid_cores if c.isdigit()]
             if len(core_values) >= 2:
@@ -1023,7 +932,6 @@ class PerfComparator:
                     return f'{self.configs[1].display_name} 多 {-diff} 核心'
         except:
             pass
-
         return '核心数不同'
 
     def _analyze_thread_difference(self, thread_counts: List[str]) -> str:
@@ -1033,8 +941,6 @@ class PerfComparator:
             return '数据不完整'
         if all(t == valid_threads[0] for t in valid_threads):
             return '线程数相同'
-
-        # 尝试解析数值
         try:
             thread_values = [int(t) for t in valid_threads if t.isdigit()]
             if len(thread_values) >= 2:
@@ -1045,33 +951,48 @@ class PerfComparator:
                     return f'{self.configs[1].display_name} 多 {-diff} 线程'
         except:
             pass
-
         return '线程数不同'
 
-    def _analyze_instruction_set_difference(self, instruction_sets: List[List[str]]) -> str:
-        """分析指令集差异"""
-        valid_isets = [isets for isets in instruction_sets if isets]
-        if len(valid_isets) < 2:
+    def _analyze_manufacturer_difference(self, manufacturers: List[str]) -> str:
+        """分析制造商差异"""
+        valid_mfrs = [m for m in manufacturers if m != 'NA']
+        if len(valid_mfrs) < 2:
             return '数据不完整'
+        if all(m == valid_mfrs[0] for m in valid_mfrs):
+            return '制造商相同'
+        # 简化制造商名
+        mfr_names = []
+        for m in valid_mfrs:
+            if 'AMD' in m:
+                mfr_names.append('AMD')
+            elif 'Intel' in m:
+                mfr_names.append('Intel')
+            elif 'HiSilicon' in m:
+                mfr_names.append('华为海思')
+            elif 'Advanced Micro' in m:
+                mfr_names.append('AMD')
+            else:
+                mfr_names.append(m[:20])
+        if len(set(mfr_names)) > 1:
+            return '不同制造商'
+        return '制造商相同'
 
-        # 检查架构特征
-        has_avx = [any('AVX' in i for i in isets) for isets in valid_isets]
-        has_sve = [any('SVE' in i for i in isets) for isets in valid_isets]
-
-        if all(has_avx) and not any(has_sve):
-            return '均为 x86 架构，支持 AVX 系列指令集'
-        elif all(has_sve) and not any(has_avx):
-            return '均为 ARM 架构，支持 SVE 系列指令集'
-        elif has_avx[0] and has_sve[1]:
-            return '不同架构指令集（x86 AVX vs ARM SVE）'
-        elif has_sve[0] and has_avx[1]:
-            return '不同架构指令集（ARM SVE vs x86 AVX）'
-
-        # 比较具体指令集差异
-        common_isets = set(valid_isets[0]) & set(valid_isets[1])
-        unique_isets = [set(isets) - common_isets for isets in valid_isets]
-
-        if not any(unique_isets):
-            return '关键指令集相同'
-
-        return '关键指令集存在差异'
+    def _analyze_family_difference(self, families: List[str]) -> str:
+        """分析 CPU 家族差异"""
+        valid_families = [f for f in families if f != 'NA']
+        if len(valid_families) < 2:
+            return '数据不完整'
+        if all(f == valid_families[0] for f in valid_families):
+            return 'CPU 家族相同'
+        # 判断架构类型
+        arch_info = []
+        for f in valid_families:
+            if 'Zen' in f:
+                arch_info.append('AMD Zen')
+            elif 'ARM' in f or 'Kunpeng' in f:
+                arch_info.append('ARM')
+            elif 'Intel' in f or 'Core' in f:
+                arch_info.append('Intel')
+        if len(set(arch_info)) > 1:
+            return '不同架构家族'
+        return '同架构不同世代'
