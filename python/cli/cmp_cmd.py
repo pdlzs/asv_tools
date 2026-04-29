@@ -8,6 +8,8 @@ from typing import Optional
 from core.config import Config, load_config
 from core.executor import execute_on_machine
 from core.downloader import download_results
+from core.perf_collector import PerfCollector, perf_config_to_yaml
+from core.perf_comparator import PerfComparator
 from ssh_utils import test_connection
 from asv_compare_wrapper import compare_results
 
@@ -17,6 +19,84 @@ def setup_logging(verbose: bool = False):
     import logging
     level = logging.DEBUG if verbose else logging.INFO
     logging.basicConfig(level=level, format='%(message)s')
+
+
+def run_collect_for_cmp(config: Config, output_dir: Path,
+                        dry_run: bool = False, verbose: bool = False) -> bool:
+    """在 cmp 流程中执行 collect 采集
+
+    Args:
+        config: cmp 配置
+        output_dir: 输出目录
+        dry_run: 是否只显示命令不执行
+        verbose: 详细输出模式
+
+    Returns:
+        是否成功采集所有机器配置
+    """
+    perf_dir = output_dir / "perf_config"
+    perf_dir.mkdir(parents=True, exist_ok=True)
+
+    configs = []
+    for machine_name, machine in config.machines.items():
+        print(f"\n{'='*50}")
+        print(f"采集 {machine_name} 性能配置...")
+        print(f"{'='*50}")
+
+        script = config.get_collect_script_for_machine(machine_name)
+
+        if dry_run:
+            print(f"[DRY-RUN] 将在 {machine_name} 上执行采集脚本:")
+            collector = PerfCollector(machine, script, verbose)
+            print(collector._build_collect_script())
+            continue
+
+        collector = PerfCollector(machine, script, verbose)
+
+        # 测试连接
+        if not collector.test_connection():
+            print(f"[{machine_name}] 连接失败", file=sys.stderr)
+            continue
+
+        # 执行采集
+        perf_config = collector.collect()
+        if perf_config is None:
+            print(f"[{machine_name}] 采集失败", file=sys.stderr)
+            continue
+
+        configs.append(perf_config)
+
+        # 保存单机配置
+        yaml_content = perf_config_to_yaml(perf_config)
+        output_file = perf_dir / f"{machine_name}_perf.yaml"
+        with open(output_file, 'w', encoding='utf-8') as f:
+            f.write(yaml_content)
+        print(f"[{machine_name}] 配置已保存: {output_file}")
+
+    if dry_run:
+        print("\n[DRY-RUN] 采集预览完成")
+        return True
+
+    # 生成对比报告
+    if len(configs) >= 2:
+        print(f"\n{'='*50}")
+        print("生成性能配置对比报告...")
+        print(f"{'='*50}")
+
+        comparator = PerfComparator(configs)
+        report = comparator.compare()
+
+        report_file = perf_dir / "perf_compare.md"
+        with open(report_file, 'w', encoding='utf-8') as f:
+            f.write(report)
+        print(f"对比报告已保存: {report_file}")
+    elif len(configs) == 1:
+        print("\n仅采集到一台机器配置，跳过对比报告生成")
+    else:
+        print("\n所有机器采集失败", file=sys.stderr)
+        return False
+
+    return len(configs) == len(config.machines)
 
 
 def create_output_dir(config: Config, args) -> Path:
@@ -71,22 +151,29 @@ def run_compare(args) -> int:
                     return 1
         print("SSH 连接验证成功")
 
-    # 6. 执行脚本（可选跳过）
+    # 6. 执行 collect 采集（可选）
+    if config.compare.collect and not args.skip_run:
+        print("\n采集性能配置 (collect=true)...")
+        if not run_collect_for_cmp(config, output_dir, args.dry_run, args.verbose):
+            print("性能配置采集失败", file=sys.stderr)
+            return 1
+
+    # 7. 执行脚本（可选跳过）
     if args.skip_run:
         print("跳过 ASV 运行 (--skip-run)")
     elif not args.dry_run:
         for name, machine in config.machines.items():
-            script = config.get_script_for_machine(name)
+            script = config.get_compare_script_for_machine(name)
             if not execute_on_machine(machine, script, args.dry_run, args.verbose):
                 print(f"在 {name} 上执行脚本失败", file=sys.stderr)
                 return 1
     else:
         # dry-run 模式下显示脚本
         for name, machine in config.machines.items():
-            script = config.get_script_for_machine(name)
+            script = config.get_compare_script_for_machine(name)
             execute_on_machine(machine, script, dry_run=True, verbose=args.verbose)
 
-    # 7. 下载结果
+    # 8. 下载结果
     machine_names = list(config.machines.keys())
     server1_name = machine_names[0]
     server2_name = machine_names[1]
@@ -104,7 +191,7 @@ def run_compare(args) -> int:
             print(f"从 {name} 下载结果失败", file=sys.stderr)
             return 1
 
-    # 8. 执行对比（非 dry-run 模式）
+    # 9. 执行对比（非 dry-run 模式）
     if not args.dry_run:
         if not compare_results(
             str(server1_dir),

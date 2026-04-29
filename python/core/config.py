@@ -30,6 +30,7 @@ class MachineConfig:
 class CompareConfig:
     """对比配置"""
     show_all: bool = True
+    collect: bool = False          # 是否在 compare 前执行 collect 采集
 
 
 @dataclass
@@ -50,7 +51,8 @@ class RuntimeConfig:
 class Config:
     """完整配置"""
     machines: Dict[str, MachineConfig]
-    scripts: Dict[str, str]
+    compare_scripts: Dict[str, str]     # ASV compare 执行脚本
+    collect_scripts: Dict[str, str]     # collect 采集脚本（可选）
     compare: CompareConfig
     output: OutputConfig
     runtime: RuntimeConfig
@@ -72,16 +74,20 @@ class Config:
             if not machine.is_local and not machine.username:
                 errors.append(f"远程机器 {name} 缺少 username 配置")
 
-        # 验证每台机器都有对应的脚本
+        # 验证每台机器都有对应的 compare_scripts
         for name in self.machines.keys():
-            if name not in self.scripts:
-                errors.append(f"机器 {name} 缺少对应的脚本配置")
+            if name not in self.compare_scripts:
+                errors.append(f"机器 {name} 缺少对应的 compare_scripts 配置")
 
         return errors
 
-    def get_script_for_machine(self, machine_name: str) -> str:
-        """获取指定机器的脚本"""
-        return self.scripts.get(machine_name, "")
+    def get_compare_script_for_machine(self, machine_name: str) -> str:
+        """获取指定机器的 compare 脚本"""
+        return self.compare_scripts.get(machine_name, "")
+
+    def get_collect_script_for_machine(self, machine_name: str) -> str:
+        """获取指定机器的 collect 脚本（可选）"""
+        return self.collect_scripts.get(machine_name, "")
 
 
 def load_config(config_path: str) -> Config:
@@ -101,17 +107,23 @@ def load_config(config_path: str) -> Config:
             username=m.get("username")
         )
 
+    # 解析脚本配置
+    # compare_scripts: 优先使用 compare_scripts，兼容旧版 scripts
+    compare_scripts = data.get("compare_scripts", data.get("scripts", {}))
+    collect_scripts = data.get("collect_scripts", {})
+
     # 解析其他配置
-    scripts = data.get("scripts", {})
     compare_data = data.get("compare", {})
     output_data = data.get("output", {})
     runtime_data = data.get("runtime", {})
 
     return Config(
         machines=machines,
-        scripts=scripts,
+        compare_scripts=compare_scripts,
+        collect_scripts=collect_scripts,
         compare=CompareConfig(
-            show_all=compare_data.get("show_all", True)
+            show_all=compare_data.get("show_all", True),
+            collect=compare_data.get("collect", False)
         ),
         output=OutputConfig(
             dir=output_data.get("dir", "./cmp_results"),

@@ -14,7 +14,8 @@ machines:
     username: "user"
     asv_project_dir: "/home/user/benchmark"
 
-scripts:
+# ASV compare 执行脚本（原 scripts 字段）
+compare_scripts:
   server1: |
     source ~/miniconda3/bin/activate myenv
     cd {work_dir}
@@ -27,8 +28,19 @@ scripts:
     rm -rf results
     asv run -b "bench_reduce" --python=same
 
+# collect 采集脚本（可选，当 compare.collect=true 时使用）
+collect_scripts:
+  server1: |
+    source ~/miniconda3/bin/activate myenv
+    eval "$COLLECT_ENV"
+
+  server2: |
+    source ~/miniconda3/bin/activate myenv
+    eval "$COLLECT_ENV"
+
 compare:
   show_all: true                  # 是否显示未变化的 benchmark
+  collect: false                  # 是否在 compare 前执行 collect 采集
 
 output:
   dir: "./cmp_results"

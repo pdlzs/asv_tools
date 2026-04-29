@@ -129,9 +129,13 @@ python/
 
 **cmp 配置** (`cmp.yaml`):
 - `machines`: 服务器配置（必须 2 台），支持 `host: "local"` 本地执行
-- `scripts`: 每台机器的执行脚本，支持 `{work_dir}` 占位符
+- `compare_scripts`: 每台机器的 ASV compare 执行脚本（兼容旧版 `scripts` 字段），支持 `{work_dir}` 占位符
+- `collect_scripts`: 每台机器的 collect 采集脚本（可选），用于环境初始化
 - `compare.show_all`: 是否显示未变化的 benchmark
+- `compare.collect`: 是否在 compare 前执行 collect 采集（默认 false）
 - `output.dir`: 输出目录，默认 `./cmp_results`
+
+**collect 采集输出**: 当 `compare.collect: true` 时，采集结果保存在输出目录的 `perf_config/` 子目录下。
 
 **cont 配置** (`cont.yaml`):
 - `machines`: 服务器配置（1台或多台），支持 `host: "local"` 本地执行

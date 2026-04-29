@@ -16,7 +16,8 @@ machines:
     username: "user"
     asv_project_dir: "/home/user/benchmark"
 
-scripts:
+# ASV compare 执行脚本（原 scripts 字段）
+compare_scripts:
   server1: |
     # 在 Docker 容器中执行 ASV benchmark
     docker exec numpy_bench bash -c '
@@ -39,8 +40,18 @@ scripts:
     # 将容器内的结果目录复制到宿主机
     docker cp numpy_bench:/workspace/numpy/benchmarks/results /home/user/benchmark/results
 
+# collect 采集脚本（可选，当 compare.collect=true 时使用）
+# Docker 容器场景：在容器内执行环境采集
+collect_scripts:
+  server1: |
+    docker exec numpy_bench bash -c 'source /opt/conda/bin/activate numpy_dev && eval "$COLLECT_ENV"'
+
+  server2: |
+    docker exec numpy_bench bash -c 'source /opt/conda/bin/activate numpy_dev && eval "$COLLECT_ENV"'
+
 compare:
   show_all: true
+  collect: false                  # 是否在 compare 前执行 collect 采集
 
 output:
   dir: "./cmp_results"

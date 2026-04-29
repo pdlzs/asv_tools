@@ -5,7 +5,7 @@ including CPU, memory, BIOS, kernel parameters, and environment settings.
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Union
 import re
 import sys
 from pathlib import Path
@@ -15,6 +15,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from ssh_utils import SSHClient, SSHConfig
 from core.collect_config import CollectMachineConfig
+
+# 支持 cmp 流程中使用 MachineConfig
+try:
+    from core.config import MachineConfig
+except ImportError:
+    MachineConfig = None  # type: ignore
 
 
 @dataclass
@@ -154,7 +160,7 @@ export COLLECT_ENV
 echo '=== COLLECT_DONE ==='
 """
 
-    def __init__(self, machine: CollectMachineConfig,
+    def __init__(self, machine: Union[CollectMachineConfig, 'MachineConfig'],
                  script: Optional[str] = None,
                  verbose: bool = False):
         self.machine = machine
