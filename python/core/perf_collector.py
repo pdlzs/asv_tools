@@ -43,9 +43,10 @@ class PerfConfig:
 class PerfCollector:
     """性能配置采集器"""
 
-    # 采集脚本模板
+    # 采集脚本模板 - 分为两部分：宿主机硬件信息 + 环境信息
+    # scripts 在两部分之间执行，用户可通过 ENV_EXEC 变量控制环境采集位置
     COLLECT_SCRIPT_TEMPLATE = """
-{env_setup}
+# === 第一部分：宿主机硬件信息采集 ===
 
 echo '=== MACHINE_INFO ==='
 uname -m
@@ -103,29 +104,11 @@ echo '=== THP_DETAILS ==='
 cat /sys/kernel/mm/transparent_hugepage/defrag 2>/dev/null || echo 'NA: THP defrag not available'
 cat /sys/kernel/mm/transparent_hugepage/shmem_enabled 2>/dev/null || echo 'NA: THP shmem not available'
 
-echo '=== PYTHON_VERSION ==='
-python --version 2>&1 || echo 'NA: Python 不可用'
-
-echo '=== GCC_VERSION ==='
-(gcc --version 2>&1 | head -1) || echo 'NA: GCC 不可用'
-
-echo '=== BLAS_VERSION ==='
-(condarun list 2>/dev/null | grep -E '^blas ') || (pip list 2>/dev/null | grep -i blas) || echo 'NA: BLAS 未安装或检测失败'
-
-echo '=== LAPACK_VERSION ==='
-(conda list 2>/dev/null | grep -E '^lapack ') || (pip list 2>/dev/null | grep -i lapack) || echo 'NA: LAPACK 未安装或检测失败'
-
-echo '=== ENV_VARS ==='
-env | grep -E '^(OMP|MKL|OPENBLAS|NUMEXPR|BLIS|KMP|VECLIB)' 2>&1 || echo 'NA: 无性能相关环境变量'
-
 echo '=== KERNEL_PARAMS ==='
 sysctl vm.swappiness vm.dirty_ratio vm.dirty_background_ratio vm.zone_reclaim_mode vm.min_free_kbytes kernel.shmmax kernel.shmall kernel.sched_autogroup_enabled kernel.numa_balancing kernel.randomize_va_space 2>&1 || echo 'NA: sysctl 不可用'
 
 echo '=== KERNEL_CMDLINE ==='
 cat /proc/cmdline 2>/dev/null || echo 'NA: /proc/cmdline not available'
-
-echo '=== LIMITS ==='
-ulimit -a 2>&1 || echo 'NA: ulimit 不可用'
 
 echo '=== SYSTEM_SERVICES ==='
 irqbalance_status=$(systemctl is-active irqbalance 2>/dev/null); echo "irqbalance: ${{irqbalance_status:-NA: not installed}}"
@@ -133,6 +116,40 @@ tuned_status=$(tuned-adm active 2>/dev/null); echo "tuned: ${{tuned_status:-NA: 
 
 echo '=== SWAP_CONFIG ==='
 swapon --show 2>/dev/null || echo 'NA: no swap or swapon not available'
+
+echo '=== HOST_DONE ==='
+
+# === COLLECT_ENV 定义 ===
+# COLLECT_ENV 变量包含环境采集命令，用户在 scripts 中执行
+# 执行方式示例：
+#   eval "$COLLECT_ENV"                          # 当前 shell（可先激活 conda）
+#   docker exec container sh -c "$COLLECT_ENV"   # 进入容器
+#   docker exec container bash -c 'source activate env; eval "$COLLECT_ENV"'  # 容器+conda
+COLLECT_ENV='
+echo "=== PYTHON_VERSION ==="
+python --version 2>&1 || python3 --version 2>&1 || echo "NA"
+
+echo "=== GCC_VERSION ==="
+(gcc --version 2>&1 | head -1) || echo "NA"
+
+echo "=== BLAS_VERSION ==="
+(conda list 2>/dev/null | grep -E "^blas ") || (pip list 2>/dev/null | grep -i blas) || echo "NA"
+
+echo "=== LAPACK_VERSION ==="
+(conda list 2>/dev/null | grep -E "^lapack ") || (pip list 2>/dev/null | grep -i lapack) || echo "NA"
+
+echo "=== ENV_VARS ==="
+env | grep -E "^(OMP|MKL|OPENBLAS|NUMEXPR|BLIS|KMP|VECLIB)" 2>&1 || echo "NA"
+
+echo "=== LIMITS ==="
+ulimit -a 2>&1 || echo "NA"
+
+echo "=== ENV_DONE ==="
+'
+export COLLECT_ENV
+
+# === scripts 执行（用户显式执行 eval "$COLLECT_ENV"） ===
+{env_setup}
 
 echo '=== COLLECT_DONE ==='
 """

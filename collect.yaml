@@ -16,15 +16,36 @@ machines:
 
 scripts:
   server1: |
-    # AMD Zen4 服务器环境初始化
+    # AMD Zen4 服务器 - 在当前 shell 执行（先激活 conda）
     source ~/miniconda3/bin/activate numpy_bench
-    export OMP_NUM_THREADS=192
+    eval "$COLLECT_ENV"
 
   server2: |
-    # 鲲鹏 950 服务器环境初始化
-    source /opt/conda/bin/activate numpy_bench
-    export OMP_NUM_THREADS=64
+    # 鲲鹏 950 服务器 - 进入 Docker 容器执行
+    docker exec numpy_container sh -c "$COLLECT_ENV"
+
+    # 其他方式示例（取消注释使用）：
+    # === 进入容器 + 激活 conda ===
+    # docker exec numpy_container bash -c 'source /opt/conda/bin/activate numpy_bench; eval "$COLLECT_ENV"'
+
+    # === 进入 Kubernetes Pod ===
+    # kubectl exec numpy-pod -n benchmark -- sh -c "$COLLECT_ENV"
+
+    # === 进入 Pod + 激活 conda ===
+    # kubectl exec numpy-pod -n benchmark -- bash -c 'source /opt/conda/bin/activate numpy_bench; eval "$COLLECT_ENV"'
 
 output:
   dir: "./collect_results"
   custom_info: "zen4_vs_kp950"
+
+# COLLECT_ENV 使用说明：
+# 采集分为两部分：
+# 1. 宿主机硬件信息（dmidecode、CPU、内存、NUMA、内核参数）- 自动执行
+# 2. 环境信息（Python、GCC、BLAS、环境变量）- 用户在 scripts 中显式执行
+#
+# 必须在 scripts 中执行 COLLECT_ENV 变量：
+#   eval "$COLLECT_ENV"              # 当前 shell
+#   docker exec container sh -c "$COLLECT_ENV"  # 进入容器
+#   docker exec container bash -c 'source activate env; eval "$COLLECT_ENV"'  # 容器+conda
+#
+# 注意：如果不执行 COLLECT_ENV，环境信息将为 NA

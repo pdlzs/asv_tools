@@ -8,8 +8,19 @@ machines:
 
 scripts:
   local_machine: |
-    # 本地环境初始化（可选）
+    # 本地测试 - 在当前 shell 执行
+    eval "$COLLECT_ENV"
+
+    # 其他方式示例（取消注释使用）：
+    # === 先激活 conda 再执行 ===
     # source ~/miniconda3/bin/activate myenv
+    # eval "$COLLECT_ENV"
+
+    # === 进入 Docker 容器执行 ===
+    # docker exec my_container sh -c "$COLLECT_ENV"
+
+    # === 进入容器 + 激活 conda ===
+    # docker exec my_container bash -c 'source /opt/conda/bin/activate myenv; eval "$COLLECT_ENV"'
 
 output:
   dir: "./collect_results"
