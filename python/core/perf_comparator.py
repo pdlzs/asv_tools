@@ -79,9 +79,9 @@ class PerfComparator:
         return '\n'.join(lines)
 
     def _format_machines_header(self) -> str:
-        """格式化机器列表标题，使用 display_name"""
-        names = [cfg.display_name for cfg in self.configs]
-        return ' vs '.join(names)
+        """格式化机器列表标题，包含 display_name 和 host"""
+        items = [f"{cfg.display_name} ({cfg.host})" for cfg in self.configs]
+        return ' vs '.join(items)
 
     def _get_collect_times(self) -> str:
         """获取采集时间"""
