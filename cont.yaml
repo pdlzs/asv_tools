@@ -2,6 +2,11 @@
 # 用于在指定机器上对比两个 commit 的性能
 # 使用方法: python main.py cont cont.yaml
 
+# 全局环境变量（可选）- 可在 scripts 中以 {VAR} 引用，运行时自动导出
+# export:
+#   BENCH_NAME: "bench_reduce"
+#   PYTHON_VER: "same"
+
 # 示例1: 本地单机执行
 machines:
   local_machine:
@@ -30,12 +35,12 @@ commits:
   branch: "HEAD"      # 测试 commit
 
 # 每台机器的执行脚本（可选，用于设置环境）
-scripts:
+cont_scripts:
   local_machine: |
     cd {work_dir}
 
-# 示例2 的 scripts（取消注释使用）
-# scripts:
+# 示例2 的 cont_scripts（取消注释使用）
+# cont_scripts:
 #   server1: |
 #     source ~/miniconda3/bin/activate myenv
 #     cd {work_dir}
@@ -43,18 +48,6 @@ scripts:
 #   server2: |
 #     source ~/miniconda3/bin/activate myenv
 #     cd {work_dir}
-
-# ASV continuous 选项（可选，不指定则使用官方默认值）
-asv_options:
-  bench: "bench_reduce"       # benchmark 正则表达式
-  factor: 1.1                 # 变化阈值（默认 1.1）
-  machine: "compare_machine"  # 机器名称
-  python: "same"              # Python 版本
-  split: true                 # 分组显示结果 (improved/same/regressed)
-  only_changed: true          # 只显示有变化的 benchmark
-  show_stderr: false          # 显示 stderr 输出
-  quick: false                # 快速运行模式（每个 benchmark 只运行一次）
-  verbose: true               # 详细输出
 
 # 输出配置
 output:
@@ -65,4 +58,3 @@ output:
 runtime:
   ssh_timeout: 30
   log_level: "INFO"
-  timeout: 3600  # asv continuous 执行超时时间（秒）

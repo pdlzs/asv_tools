@@ -1,5 +1,10 @@
 # 本地测试配置
 
+# 全局环境变量（可选）- 可在 scripts 中以 {VAR} 引用，运行时自动导出
+# export:
+#   BENCH_NAME: "bench_reduce"
+#   PYTHON_VER: "same"
+
 machines:
   server1:
     host: "local"

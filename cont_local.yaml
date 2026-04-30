@@ -1,6 +1,11 @@
 # ASV Continuous 本地测试配置
 # 使用方法: python main.py cont ../cont_local.yaml --dry-run
 
+# 全局环境变量（可选）
+# export:
+#   BENCH_NAME: "bench_reduce"
+#   PYTHON_VER: "same"
+
 machines:
   server1:
     host: "local"
@@ -12,19 +17,16 @@ commits:
   base: "HEAD~1"
   branch: "HEAD"
 
-scripts:
+cont_scripts:
   server1: |
     cd /mnt/d/code/numpy/benchmarks
     rm -rf results
     rm -rf env
-
-asv_options:
-  bench: "bench_reduce"
-  verbose: true
 
 output:
   dir: "./cont_results"
   custom_info: "local_test"
 
 runtime:
-  timeout: 3600
+  ssh_timeout: 30
+  log_level: "INFO"

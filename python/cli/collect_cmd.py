@@ -7,6 +7,7 @@ from pathlib import Path
 from core.collect_config import CollectConfig, load_collect_config
 from core.perf_collector import PerfCollector, perf_config_to_yaml
 from core.perf_comparator import PerfComparator
+from core.template import render_template, build_export_statements
 
 
 def setup_logging(verbose: bool = False):
@@ -87,11 +88,15 @@ def check_tools_on_machine(machine_name: str, config: CollectConfig, verbose: bo
     # 构建检查脚本：先执行 scripts（激活环境），再检查工具
     check_script = ""
 
-    # 1. 先执行 scripts（激活环境）
+    # 1. 前置 export 语句
+    check_script += build_export_statements(config.export)
+
+    # 2. 执行 scripts（激活环境）- 渲染 export 模板变量
     if script:
+        rendered_script = render_template(script, **config.export)
         check_script += f"""
 # === 环境初始化 ===
-{script}
+{rendered_script}
 """
     else:
         check_script += "# 无环境初始化脚本\n"
@@ -226,6 +231,10 @@ def collect_from_machine(machine_name: str, config: CollectConfig,
     """从单台机器采集性能配置"""
     machine = config.machines[machine_name]
     script = config.get_script_for_machine(machine_name)
+
+    # 渲染 export 模板变量 + 前置 export 语句
+    if script and config.export:
+        script = build_export_statements(config.export) + render_template(script, **config.export)
 
     collector = PerfCollector(machine, script, verbose)
 

@@ -80,6 +80,8 @@ python/
 │   ├── collect_cmd.py   # collect 子命令实现，性能配置采集
 │   └── ssh_setup_cmd.py # ssh-setup 子命令，一键配置免密登录
 ├── core/
+│   ├── machine_config.py # 统一的机器配置数据类（三种模式共用）
+│   ├── template.py       # 统一的模板渲染（{var} 占位符替换 + export 语句生成）
 │   ├── config.py        # cmp 配置解析 (YAML → dataclass)
 │   ├── cont_config.py   # cont 配置解析
 │   ├── collect_config.py# collect 配置解析
@@ -121,14 +123,19 @@ python/
 **cont 模式**:
 - 支持一台或多台机器，每台机器上运行相同的 commit 对比
 - `host: "local"` 表示本地执行，远程机器需配置 username
-- scripts 完全控制执行内容，支持 `{work_dir}`、`{base}`、`{branch}` 占位符
+- cont_scripts 完全控制执行内容，支持 `{work_dir}`、`{base}`、`{branch}` 占位符
 - commits 为可选配置，提供 `{base}` 和 `{branch}` 模板变量
+
+**机器配置统一**: 三种模式共用 `core/machine_config.py` 中的 `MachineConfig` 数据类。
+
+**export 全局环境变量**: 三种模式均支持 YAML 顶层 `export:` 字段，定义的环境变量在 scripts 中可用作 `{VAR}` 模板占位符，运行时自动导出为 shell 环境变量。
 
 ## 配置文件格式
 
 **cmp 配置** (`cmp.yaml`):
+- `export`: 全局环境变量（可选），可在 scripts 中以 `{VAR}` 引用
 - `machines`: 服务器配置（必须 2 台），支持 `host: "local"` 本地执行
-- `compare_scripts`: 每台机器的 ASV compare 执行脚本（兼容旧版 `scripts` 字段），支持 `{work_dir}` 占位符
+- `compare_scripts`: 每台机器的 ASV compare 执行脚本（兼容旧版 `scripts` 字段），支持 `{work_dir}` 和 export 变量占位符
 - `collect_scripts`: 每台机器的 collect 采集脚本（可选），用于环境初始化
 - `compare.show_all`: 是否显示未变化的 benchmark
 - `compare.collect`: 是否在 compare 前执行 collect 采集（默认 false）
@@ -137,15 +144,17 @@ python/
 **collect 采集输出**: 当 `compare.collect: true` 时，采集结果保存在输出目录的 `perf_config/` 子目录下。
 
 **cont 配置** (`cont.yaml`):
+- `export`: 全局环境变量（可选）
 - `machines`: 服务器配置（1台或多台），支持 `host: "local"` 本地执行
 - `commits`: 可选，提供 `{base}` 和 `{branch}` 模板变量
-- `scripts`: 每台机器的执行脚本，支持 `{work_dir}`、`{base}`、`{branch}` 占位符
+- `cont_scripts`: 每台机器的执行脚本，支持 `{work_dir}`、`{base}`、`{branch}` 和 export 变量占位符
 - `output.dir`: 输出目录
 
 **collect 配置** (`collect.yaml`):
+- `export`: 全局环境变量（可选）
 - `machines`: 服务器配置（1台或多台），支持 `host: "local"` 本地执行
 - `machines.hostname`: 显示名称（可选，用于对比报告标识机器，默认使用 name）
-- `scripts`: 每台机器的环境初始化脚本（如激活 conda、设置环境变量）
+- `collect_scripts`: 每台机器的环境初始化脚本（如激活 conda、设置环境变量）
 - `output.dir`: 输出目录，默认 `./collect_results`
 - `output.custom_info`: 自定义标识，用于输出文件名
 

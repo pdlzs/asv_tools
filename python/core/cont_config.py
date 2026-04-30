@@ -1,29 +1,11 @@
-"""Configuration handling for ASV continuous comparison"""
+"""Configuration handling for ASV continuous comparison (cont mode)"""
 
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Dict, List, Optional
 import yaml
 
-
-@dataclass
-class ContMachineConfig:
-    """单台机器配置"""
-    name: str
-    host: str                           # "local" 表示本地执行
-    asv_project_dir: str
-    hostname: Optional[str] = None      # 显示名称（可选）
-    port: int = 22
-    username: Optional[str] = None
-
-    @property
-    def display_name(self) -> str:
-        """显示名称，优先使用 hostname"""
-        return self.hostname if self.hostname else self.name
-
-    @property
-    def is_local(self) -> bool:
-        return self.host == "local"
+from core.machine_config import MachineConfig
+from core.template import render_template
 
 
 @dataclass
@@ -45,17 +27,17 @@ class ContRuntimeConfig:
     """运行时配置"""
     ssh_timeout: int = 30
     log_level: str = "INFO"
-    timeout: int = 3600
 
 
 @dataclass
 class ContConfig:
     """ASV continuous 完整配置"""
-    machines: Dict[str, ContMachineConfig]
-    scripts: Dict[str, str]
+    machines: Dict[str, MachineConfig]
+    cont_scripts: Dict[str, str]
     commits: Optional[CommitsConfig] = None  # 可选，作为模板变量
     output: ContOutputConfig = field(default_factory=ContOutputConfig)
     runtime: ContRuntimeConfig = field(default_factory=ContRuntimeConfig)
+    export: Dict[str, str] = field(default_factory=dict)  # 全局环境变量
 
     def validate(self) -> List[str]:
         """验证配置，返回错误列表"""
@@ -76,15 +58,17 @@ class ContConfig:
         return errors
 
     def get_script_for_machine(self, machine_name: str) -> str:
-        """获取指定机器的脚本，替换模板变量"""
-        script = self.scripts.get(machine_name, "")
+        """获取指定机器的脚本，替换所有模板变量"""
+        script = self.cont_scripts.get(machine_name, "")
         machine = self.machines.get(machine_name)
-        if machine:
-            script = script.replace("{work_dir}", machine.asv_project_dir)
-        if self.commits:
-            script = script.replace("{base}", self.commits.base)
-            script = script.replace("{branch}", self.commits.branch)
-        return script
+
+        work_dir = machine.asv_project_dir if machine else None
+        base = self.commits.base if self.commits else None
+        branch = self.commits.branch if self.commits else None
+
+        return render_template(script,
+            work_dir=work_dir, base=base, branch=branch,
+            **self.export)
 
 
 def load_cont_config(config_path: str) -> ContConfig:
@@ -95,13 +79,13 @@ def load_cont_config(config_path: str) -> ContConfig:
     # 解析 machines
     machines = {}
     for name, m in data.get("machines", {}).items():
-        machines[name] = ContMachineConfig(
+        machines[name] = MachineConfig(
             name=name,
             host=m["host"],
-            asv_project_dir=m["asv_project_dir"],
             hostname=m.get("hostname"),
             port=m.get("port", 22),
-            username=m.get("username")
+            username=m.get("username"),
+            asv_project_dir=m.get("asv_project_dir")
         )
 
     # 解析 commits（可选，作为模板变量）
@@ -113,8 +97,8 @@ def load_cont_config(config_path: str) -> ContConfig:
             branch=commits_data.get("branch", "HEAD")
         )
 
-    # 解析 scripts
-    scripts = data.get("scripts", {})
+    # 解析 cont_scripts（兼容旧版 scripts 字段名）
+    cont_scripts = data.get("cont_scripts", data.get("scripts", {}))
 
     # 解析 output（可选）
     output_data = data.get("output", {})
@@ -127,14 +111,14 @@ def load_cont_config(config_path: str) -> ContConfig:
     runtime_data = data.get("runtime", {})
     runtime = ContRuntimeConfig(
         ssh_timeout=runtime_data.get("ssh_timeout", 30),
-        log_level=runtime_data.get("log_level", "INFO"),
-        timeout=runtime_data.get("timeout", 3600)
+        log_level=runtime_data.get("log_level", "INFO")
     )
 
     return ContConfig(
         machines=machines,
         commits=commits,
-        scripts=scripts,
+        cont_scripts=cont_scripts,
         output=output,
-        runtime=runtime
+        runtime=runtime,
+        export=data.get("export", {})
     )

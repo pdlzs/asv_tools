@@ -1,28 +1,10 @@
-"""Configuration handling for performance config collection"""
+"""Configuration handling for performance config collection (collect mode)"""
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Dict, List, Optional
 import yaml
 
-
-@dataclass
-class CollectMachineConfig:
-    """采集机器配置"""
-    name: str
-    host: str                           # "local" 表示本地执行
-    hostname: Optional[str] = None      # 显示名称（可选，用于对比报告标识）
-    port: int = 22
-    username: Optional[str] = None
-
-    @property
-    def display_name(self) -> str:
-        """显示名称，优先使用 hostname，否则使用 name"""
-        return self.hostname if self.hostname else self.name
-
-    @property
-    def is_local(self) -> bool:
-        return self.host == "local"
+from core.machine_config import MachineConfig
 
 
 @dataclass
@@ -35,9 +17,10 @@ class CollectOutputConfig:
 @dataclass
 class CollectConfig:
     """完整采集配置"""
-    machines: Dict[str, CollectMachineConfig]
-    scripts: Dict[str, str]             # 每台机器的环境初始化脚本
+    machines: Dict[str, MachineConfig]
+    collect_scripts: Dict[str, str]             # 每台机器的环境初始化脚本
     output: CollectOutputConfig
+    export: Dict[str, str]                      # 全局环境变量（可选）
 
     def validate(self) -> List[str]:
         """验证配置，返回错误列表"""
@@ -54,8 +37,8 @@ class CollectConfig:
             if not machine.is_local and not machine.username:
                 errors.append(f"远程机器 {name} 缺少 username 配置")
 
-        # 验证 scripts（可选）
-        for name in self.scripts.keys():
+        # 验证 scripts（可选）中的机器名都在 machines 中
+        for name in self.collect_scripts.keys():
             if name not in self.machines:
                 errors.append(f"脚本 {name} 没有对应的机器配置")
 
@@ -63,7 +46,7 @@ class CollectConfig:
 
     def get_script_for_machine(self, machine_name: str) -> Optional[str]:
         """获取指定机器的脚本（可选）"""
-        return self.scripts.get(machine_name)
+        return self.collect_scripts.get(machine_name)
 
 
 def load_collect_config(config_path: str) -> CollectConfig:
@@ -74,7 +57,7 @@ def load_collect_config(config_path: str) -> CollectConfig:
     # 解析 machines
     machines = {}
     for name, m in data.get("machines", {}).items():
-        machines[name] = CollectMachineConfig(
+        machines[name] = MachineConfig(
             name=name,
             host=m["host"],
             hostname=m.get("hostname"),       # 可选的显示名称
@@ -82,17 +65,18 @@ def load_collect_config(config_path: str) -> CollectConfig:
             username=m.get("username")
         )
 
-    # 解析 scripts（可选）
-    scripts = data.get("scripts", {})
+    # 解析 collect_scripts（兼容旧版 scripts 字段名）
+    collect_scripts = data.get("collect_scripts", data.get("scripts", {}))
 
     # 解析 output
     output_data = data.get("output", {})
 
     return CollectConfig(
         machines=machines,
-        scripts=scripts,
+        collect_scripts=collect_scripts,
         output=CollectOutputConfig(
             dir=output_data.get("dir", "./perf_results"),
             custom_info=output_data.get("custom_info")
-        )
+        ),
+        export=data.get("export", {})
     )

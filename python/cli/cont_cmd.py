@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import List
 
 from core.cont_config import load_cont_config
+from core.template import build_export_statements
 from ssh_utils import SSHClient, SSHConfig
 
 
@@ -18,7 +19,7 @@ def run_script_on_machine(machine, config, script: str, dry_run: bool = False) -
     """在指定机器上运行脚本
 
     Args:
-        machine: ContMachineConfig
+        machine: MachineConfig
         config: ContConfig
         script: 执行脚本（已替换模板变量）
         dry_run: 只显示命令，不执行
@@ -49,8 +50,10 @@ def run_script_on_machine(machine, config, script: str, dry_run: bool = False) -
         print("📋 Dry-run 模式，跳过执行")
         return True, "dry-run", machine_name
 
-    # 执行脚本
-    success, output = ssh_client.execute(script, work_dir=work_dir, stream_output=True)
+    # 前置 export 语句 + 执行脚本
+    prefix = build_export_statements(config.export)
+    final_script = prefix + script
+    success, output = ssh_client.execute(final_script, work_dir=work_dir, stream_output=True)
 
     return success, output, machine_name
 
@@ -133,6 +136,10 @@ def run_continuous(args) -> int:
         print(f"\n模板变量:")
         print(f"   {{base}}: {config.commits.base}")
         print(f"   {{branch}}: {config.commits.branch}")
+    if config.export:
+        print(f"\n环境变量 (export):")
+        for k, v in config.export.items():
+            print(f"   {k}={v}")
 
     print(f"\n输出目录: {config.output.dir}")
     print("="*50)

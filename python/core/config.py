@@ -1,29 +1,10 @@
-"""Configuration handling for ASV benchmark comparison"""
+"""Configuration handling for ASV benchmark comparison (cmp mode)"""
 
-from dataclasses import dataclass, field
-from pathlib import Path
+from dataclasses import dataclass
 from typing import Dict, List, Optional
 import yaml
 
-
-@dataclass
-class MachineConfig:
-    """单台机器配置"""
-    name: str
-    host: str                           # "local" 表示本地执行
-    asv_project_dir: str
-    hostname: Optional[str] = None      # ASV compare 显示名称（可选，默认使用 name）
-    port: int = 22
-    username: Optional[str] = None
-
-    @property
-    def display_name(self) -> str:
-        """ASV compare 显示名称，优先使用 hostname"""
-        return self.hostname if self.hostname else self.name
-
-    @property
-    def is_local(self) -> bool:
-        return self.host == "local"
+from core.machine_config import MachineConfig
 
 
 @dataclass
@@ -56,6 +37,7 @@ class Config:
     compare: CompareConfig
     output: OutputConfig
     runtime: RuntimeConfig
+    export: Dict[str, str]              # 全局环境变量（可选）
 
     def validate(self) -> List[str]:
         """验证配置，返回错误列表"""
@@ -101,10 +83,10 @@ def load_config(config_path: str) -> Config:
         machines[name] = MachineConfig(
             name=name,
             host=m["host"],
-            asv_project_dir=m["asv_project_dir"],
             hostname=m.get("hostname"),
             port=m.get("port", 22),
-            username=m.get("username")
+            username=m.get("username"),
+            asv_project_dir=m.get("asv_project_dir")
         )
 
     # 解析脚本配置
@@ -132,5 +114,6 @@ def load_config(config_path: str) -> Config:
         runtime=RuntimeConfig(
             ssh_timeout=runtime_data.get("ssh_timeout", 30),
             log_level=runtime_data.get("log_level", "INFO")
-        )
+        ),
+        export=data.get("export", {})
     )

@@ -1,12 +1,16 @@
 # 性能配置采集示例配置文件
 # 本地测试版本
 
+# 全局环境变量（可选）- 可在 scripts 中以 {VAR} 引用，运行时自动导出
+# export:
+#   ENV_NAME: "myenv"
+
 machines:
   local_machine:
     host: "local"
     hostname: "localhost"             # 显示名称
 
-scripts:
+collect_scripts:
   local_machine: |
     # 本地测试 - 在当前 shell 执行
     eval "$COLLECT_ENV"

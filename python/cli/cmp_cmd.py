@@ -10,6 +10,7 @@ from core.executor import execute_on_machine
 from core.downloader import download_results
 from core.perf_collector import PerfCollector, perf_config_to_yaml
 from core.perf_comparator import PerfComparator
+from core.template import render_template, build_export_statements
 from ssh_utils import test_connection
 from asv_compare_wrapper import compare_results
 
@@ -44,6 +45,10 @@ def run_collect_for_cmp(config: Config, output_dir: Path,
         print(f"{'='*50}")
 
         script = config.get_collect_script_for_machine(machine_name)
+
+        # 渲染 export 模板变量 + 前置 export 语句
+        if script and config.export:
+            script = build_export_statements(config.export) + render_template(script, **config.export)
 
         if dry_run:
             print(f"[DRY-RUN] 将在 {machine_name} 上执行采集脚本:")
@@ -164,14 +169,16 @@ def run_compare(args) -> int:
     elif not args.dry_run:
         for name, machine in config.machines.items():
             script = config.get_compare_script_for_machine(name)
-            if not execute_on_machine(machine, script, args.dry_run, args.verbose):
+            if not execute_on_machine(machine, script, args.dry_run, args.verbose,
+                                      export_vars=config.export):
                 print(f"在 {name} 上执行脚本失败", file=sys.stderr)
                 return 1
     else:
         # dry-run 模式下显示脚本
         for name, machine in config.machines.items():
             script = config.get_compare_script_for_machine(name)
-            execute_on_machine(machine, script, dry_run=True, verbose=args.verbose)
+            execute_on_machine(machine, script, dry_run=True, verbose=args.verbose,
+                              export_vars=config.export)
 
     # 8. 下载结果
     machine_names = list(config.machines.keys())

@@ -10,6 +10,8 @@ build/
 
 # Output directories
 cmp_results/
+cont_results/
+collect_results/
 logs/
 
 # IDE/Editor

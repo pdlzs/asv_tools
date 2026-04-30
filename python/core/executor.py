@@ -1,8 +1,9 @@
 """Script executor for both local and remote machines"""
 
-from typing import Optional
+from typing import Dict, Optional
 
-from core.config import MachineConfig
+from core.machine_config import MachineConfig
+from core.template import render_template, build_export_statements
 from ssh_utils import SSHClient, SSHConfig
 
 
@@ -11,28 +12,39 @@ def execute_on_machine(
     script: str,
     dry_run: bool = False,
     verbose: bool = False,
-    stream_output: bool = True
+    stream_output: bool = True,
+    export_vars: Optional[Dict[str, str]] = None
 ) -> bool:
     """
     在指定机器上执行脚本
 
     Args:
         machine: 机器配置
-        script: 脚本内容（支持 {work_dir} 占位符）
+        script: 脚本内容（支持 {work_dir} 和 export 变量占位符）
         dry_run: 是否为干运行模式
         verbose: 是否显示详细输出
-        stream_output: 是否实时输出脚本执行结果（默认 True）
+        stream_output: 是否实时输出脚本执行结果
+        export_vars: 全局环境变量字典（可选）
 
     Returns:
         成功返回 True
     """
-    # 渲染脚本模板
-    rendered_script = script.replace("{work_dir}", machine.asv_project_dir)
+    # 拼装模板变量上下文
+    template_vars = {"work_dir": machine.asv_project_dir}
+    if export_vars:
+        template_vars.update(export_vars)
+
+    # 渲染模板
+    rendered_script = render_template(script, **template_vars)
+
+    # 前置 export 语句
+    prefix = build_export_statements(export_vars or {})
+    final_script = prefix + rendered_script
 
     if dry_run:
         print(f"[DRY-RUN] 将在 {machine.name} 上执行:")
         print("-" * 40)
-        print(rendered_script)
+        print(final_script)
         print("-" * 40)
         return True
 
@@ -55,7 +67,7 @@ def execute_on_machine(
         return False
 
     # 执行脚本
-    success, output = client.execute(rendered_script, machine.asv_project_dir, stream_output=stream_output)
+    success, output = client.execute(final_script, machine.asv_project_dir, stream_output=stream_output)
 
     print("-" * 40)
 
