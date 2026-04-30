@@ -1,9 +1,10 @@
 """cmp command implementation"""
 
 import sys
+import re
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 from core.config import Config, load_config
 from core.executor import execute_on_machine
@@ -11,6 +12,7 @@ from core.downloader import download_results
 from core.perf_collector import PerfCollector, perf_config_to_yaml
 from core.perf_comparator import PerfComparator
 from core.template import render_template, build_export_statements
+from core.log_utils import start_log_tee, stop_log_tee
 from ssh_utils import test_connection
 from asv_compare_wrapper import compare_results
 
@@ -104,8 +106,12 @@ def run_collect_for_cmp(config: Config, output_dir: Path,
     return len(configs) == len(config.machines)
 
 
-def create_output_dir(config: Config, args) -> Path:
-    """创建输出目录"""
+def create_output_dir(config: Config, args) -> Tuple[Path, str]:
+    """创建输出目录
+
+    Returns:
+        (output_dir, timestamp) 元组
+    """
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     # 确定自定义标识
@@ -121,7 +127,7 @@ def create_output_dir(config: Config, args) -> Path:
     result_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"输出目录: {result_dir}")
-    return result_dir
+    return result_dir, timestamp
 
 
 def run_compare(args) -> int:
@@ -144,73 +150,84 @@ def run_compare(args) -> int:
     setup_logging(args.verbose)
 
     # 4. 创建输出目录
-    output_dir = create_output_dir(config, args)
+    output_dir, timestamp = create_output_dir(config, args)
 
-    # 5. 测试连接
-    if not args.dry_run:
-        for name, machine in config.machines.items():
-            if not machine.is_local:
-                print(f"测试连接到 {name} ({machine.host})...")
-                if not test_connection(machine.host, machine.username, machine.port):
-                    print(f"无法连接到 {name}", file=sys.stderr)
-                    return 1
-        print("SSH 连接验证成功")
-
-    # 6. 执行 collect 采集（可选）
-    if config.compare.collect and not args.skip_run:
-        print("\n采集性能配置 (collect=true)...")
-        if not run_collect_for_cmp(config, output_dir, args.dry_run, args.verbose):
-            print("性能配置采集失败", file=sys.stderr)
-            return 1
-
-    # 7. 执行脚本（可选跳过）
-    if args.skip_run:
-        print("跳过 ASV 运行 (--skip-run)")
-    elif not args.dry_run:
-        for name, machine in config.machines.items():
-            script = config.get_compare_script_for_machine(name)
-            if not execute_on_machine(machine, script, args.dry_run, args.verbose,
-                                      export_vars=config.export):
-                print(f"在 {name} 上执行脚本失败", file=sys.stderr)
-                return 1
-    else:
-        # dry-run 模式下显示脚本
-        for name, machine in config.machines.items():
-            script = config.get_compare_script_for_machine(name)
-            execute_on_machine(machine, script, dry_run=True, verbose=args.verbose,
-                              export_vars=config.export)
-
-    # 8. 下载结果
+    # 获取服务器显示名称
     machine_names = list(config.machines.keys())
-    server1_name = machine_names[0]
-    server2_name = machine_names[1]
+    server1_display = config.machines[machine_names[0]].display_name
+    server2_display = config.machines[machine_names[1]].display_name
 
-    # 获取 ASV compare 显示名称（优先使用 hostname）
-    server1_display = config.machines[server1_name].display_name
-    server2_display = config.machines[server2_name].display_name
+    # 5. 开始日志 Tee（保存终端输出到文件）
+    log_filename = f"{server1_display}_vs_{server2_display}_{timestamp}.log.txt"
+    tee = start_log_tee(output_dir, log_filename)
 
-    server1_dir = output_dir / f"{server1_name}_results"
-    server2_dir = output_dir / f"{server2_name}_results"
+    try:
+        # 6. 测试连接
+        if not args.dry_run:
+            for name, machine in config.machines.items():
+                if not machine.is_local:
+                    print(f"测试连接到 {name} ({machine.host})...")
+                    if not test_connection(machine.host, machine.username, machine.port):
+                        print(f"无法连接到 {name}", file=sys.stderr)
+                        return 1
+            print("SSH 连接验证成功")
 
-    for name, machine in config.machines.items():
-        target_dir = output_dir / f"{name}_results"
-        if not download_results(machine, target_dir, args.dry_run, args.verbose):
-            print(f"从 {name} 下载结果失败", file=sys.stderr)
-            return 1
+        # 7. 执行 collect 采集（可选）
+        if config.compare.collect and not args.skip_run:
+            print("\n采集性能配置 (collect=true)...")
+            if not run_collect_for_cmp(config, output_dir, args.dry_run, args.verbose):
+                print("性能配置采集失败", file=sys.stderr)
+                return 1
 
-    # 9. 执行对比（非 dry-run 模式）
-    if not args.dry_run:
-        if not compare_results(
-            str(server1_dir),
-            str(server2_dir),
-            server1_display,
-            server2_display,
-            output_dir,
-            show_all=config.compare.show_all,
-            verbose=args.verbose
-        ):
-            print("ASV 结果对比失败", file=sys.stderr)
-            return 1
+        # 8. 执行脚本（可选跳过）
+        if args.skip_run:
+            print("跳过 ASV 运行 (--skip-run)")
+        elif not args.dry_run:
+            for name, machine in config.machines.items():
+                script = config.get_compare_script_for_machine(name)
+                if not execute_on_machine(machine, script, args.dry_run, args.verbose,
+                                          export_vars=config.export):
+                    print(f"在 {name} 上执行脚本失败", file=sys.stderr)
+                    return 1
+        else:
+            # dry-run 模式下显示脚本
+            for name, machine in config.machines.items():
+                script = config.get_compare_script_for_machine(name)
+                execute_on_machine(machine, script, dry_run=True, verbose=args.verbose,
+                                  export_vars=config.export)
 
-    print(f"\n完成！结果保存在: {output_dir}")
-    return 0
+        # 9. 下载结果
+        server1_name = machine_names[0]
+        server2_name = machine_names[1]
+
+        server1_dir = output_dir / f"{server1_name}_results"
+        server2_dir = output_dir / f"{server2_name}_results"
+
+        for name, machine in config.machines.items():
+            target_dir = output_dir / f"{name}_results"
+            if not download_results(machine, target_dir, args.dry_run, args.verbose):
+                print(f"从 {name} 下载结果失败", file=sys.stderr)
+                return 1
+
+        # 10. 执行对比（非 dry-run 模式）
+        if not args.dry_run:
+            if not compare_results(
+                str(server1_dir),
+                str(server2_dir),
+                server1_display,
+                server2_display,
+                output_dir,
+                show_all=config.compare.show_all,
+                verbose=args.verbose,
+                timestamp=timestamp
+            ):
+                print("ASV 结果对比失败", file=sys.stderr)
+                return 1
+
+        print(f"\n完成！结果保存在: {output_dir}")
+        print(f"日志文件: {log_filename}")
+        return 0
+
+    finally:
+        # 11. 关闭日志 Tee
+        stop_log_tee(tee)

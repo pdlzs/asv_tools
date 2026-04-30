@@ -82,7 +82,7 @@ def get_machine_name(asv_dir: str) -> str:
     raise ValueError(f"在 {asv_dir} 中未找到机器信息")
 
 
-def generate_excel_from_table(table_output: str, output_dir: Path, server1: str, server2: str):
+def generate_excel_from_table(table_output: str, output_dir: Path, server1: str, server2: str, timestamp: Optional[str] = None):
     """从 ASV 表格输出生成 Excel 文件"""
     try:
         import openpyxl
@@ -106,7 +106,10 @@ def generate_excel_from_table(table_output: str, output_dir: Path, server1: str,
         return
 
     table_lines = lines[table_start_idx:]
-    excel_output_path = output_dir / f"{server1}_vs_{server2}_table.xlsx"
+
+    # 文件名：带时间戳（与输出目录同名）
+    file_suffix = f"_{timestamp}" if timestamp else ""
+    excel_output_path = output_dir / f"{server1}_vs_{server2}_table{file_suffix}.xlsx"
 
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -188,7 +191,8 @@ def compare_results(
     server2_name: str,
     output_dir: Path,
     show_all: bool = True,
-    verbose: bool = False
+    verbose: bool = False,
+    timestamp: Optional[str] = None
 ) -> bool:
     """
     执行 ASV 结果对比（使用命令行方式）
@@ -366,14 +370,15 @@ def compare_results(
 
     print(table_output)
 
-    # 保存 txt 文件
-    txt_output_path = output_dir / f"{server1_name}_vs_{server2_name}_table.txt"
+    # 文件名：带时间戳（与输出目录同名）
+    file_suffix = f"_{timestamp}" if timestamp else ""
+    txt_output_path = output_dir / f"{server1_name}_vs_{server2_name}_table{file_suffix}.txt"
     with open(txt_output_path, 'w', encoding='utf-8') as f:
         header = f"Compare: {server1_name} [{commit1}] vs {server2_name} [{commit2}]\n\n"
         f.write(header + table_output)
     print(f"\n表格已保存到: {txt_output_path}")
 
     # 生成 Excel 文件
-    generate_excel_from_table(table_output, output_dir, server1_name, server2_name)
+    generate_excel_from_table(table_output, output_dir, server1_name, server2_name, timestamp)
 
     return True
