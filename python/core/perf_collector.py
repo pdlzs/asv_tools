@@ -37,6 +37,8 @@ class PerfConfig:
     limits: Dict[str, Any]
     system_services: Dict[str, str]     # 系统服务状态 (irqbalance, tuned)
     swap_config: Dict[str, Any]         # Swap 配置
+    selinux: Dict[str, str]             # SELinux 状态
+    firewall: Dict[str, Any]            # 防火墙状态
     collect_time: str = ""
 
 
@@ -116,6 +118,22 @@ tuned_status=$(tuned-adm active 2>/dev/null); echo "tuned: ${{tuned_status:-NA: 
 
 echo '=== SWAP_CONFIG ==='
 swapon --show 2>/dev/null || echo 'NA: no swap or swapon not available'
+
+echo '=== SELINUX_STATUS ==='
+getenforce 2>&1 || echo 'NA: SELinux not available'
+
+echo '=== FIREWALL_STATUS ==='
+if command -v firewall-cmd &>/dev/null; then
+    firewall-cmd --state 2>&1 || echo 'NA: firewalld not running'
+else
+    echo 'NA: firewalld not installed'
+fi
+if command -v ufw &>/dev/null; then
+    ufw status 2>&1 | head -5 || echo 'NA: ufw not available'
+else
+    echo 'NA: ufw not installed'
+fi
+iptables -L -n 2>&1 | head -10 || echo 'NA: iptables requires root'
 
 echo '=== HOST_DONE ==='
 
@@ -255,6 +273,8 @@ echo '=== COLLECT_DONE ==='
             limits=self._parse_limits(sections.get('LIMITS', 'NA')),
             system_services=self._parse_system_services(sections.get('SYSTEM_SERVICES', 'NA')),
             swap_config=self._parse_swap_config(sections.get('SWAP_CONFIG', 'NA')),
+            selinux=self._parse_selinux_status(sections.get('SELINUX_STATUS', 'NA')),
+            firewall=self._parse_firewall_status(sections.get('FIREWALL_STATUS', 'NA')),
             collect_time=collect_time
         )
 
@@ -960,6 +980,60 @@ echo '=== COLLECT_DONE ==='
         info['swap_count'] = len(devices)
         return info
 
+    def _parse_selinux_status(self, raw: str) -> Dict[str, str]:
+        """解析 SELinux 状态"""
+        info: Dict[str, str] = {'raw': raw}
+        if raw == 'NA' or raw.startswith('NA:'):
+            info['status'] = 'NA'
+            info['mode'] = 'NA'
+            return info
+
+        # getenforce 输出: Enforcing / Permissive / Disabled
+        raw = raw.strip()
+        if 'Enforcing' in raw:
+            info['status'] = 'enabled'
+            info['mode'] = 'Enforcing'
+        elif 'Permissive' in raw:
+            info['status'] = 'enabled'
+            info['mode'] = 'Permissive'
+        elif 'Disabled' in raw:
+            info['status'] = 'disabled'
+            info['mode'] = 'Disabled'
+        else:
+            info['status'] = 'unknown'
+            info['mode'] = raw
+
+        return info
+
+    def _parse_firewall_status(self, raw: str) -> Dict[str, Any]:
+        """解析防火墙状态"""
+        info: Dict[str, Any] = {'raw': raw}
+        if raw == 'NA' or raw.startswith('NA:'):
+            return info
+
+        # 解析 firewalld
+        info['firewalld'] = {'available': False, 'state': 'NA'}
+        if 'running' in raw.lower():
+            info['firewalld']['available'] = True
+            info['firewalld']['state'] = 'running'
+        elif 'not running' in raw.lower():
+            info['firewalld']['available'] = True
+            info['firewalld']['state'] = 'stopped'
+
+        # 解析 ufw
+        info['ufw'] = {'available': False, 'state': 'NA'}
+        if 'Status: active' in raw:
+            info['ufw']['available'] = True
+            info['ufw']['state'] = 'active'
+        elif 'Status: inactive' in raw:
+            info['ufw']['available'] = True
+            info['ufw']['state'] = 'inactive'
+
+        # 解析 iptables
+        info['iptables'] = {'available': 'Chain' in raw}
+
+        return info
+
     def _create_empty_config(self, error_msg: str) -> PerfConfig:
         """创建空配置（用于失败情况）"""
         return PerfConfig(
@@ -980,6 +1054,8 @@ echo '=== COLLECT_DONE ==='
             limits={'error': error_msg},
             system_services={},
             swap_config={'error': error_msg},
+            selinux={'status': 'NA', 'mode': 'NA'},
+            firewall={'error': error_msg},
             collect_time=""
         )
 
@@ -1011,6 +1087,8 @@ def perf_config_to_yaml(config: PerfConfig) -> str:
         'limits': config.limits,
         'system_services': config.system_services,
         'swap_config': config.swap_config,
+        'selinux': config.selinux,
+        'firewall': config.firewall,
     }
 
     return yaml.dump(data, default_flow_style=False, allow_unicode=True, sort_keys=False)

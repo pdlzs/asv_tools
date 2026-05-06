@@ -96,12 +96,22 @@ class PerfComparator:
         lines.append("")
         lines.append(self._compare_system_services())
 
-        # 15. BIOS 配置对比
+        # 15. SELinux 对比
+        lines.append("## SELinux 对比")
+        lines.append("")
+        lines.append(self._compare_selinux())
+
+        # 16. 防火墙对比
+        lines.append("## 防火墙对比")
+        lines.append("")
+        lines.append(self._compare_firewall())
+
+        # 17. BIOS 配置对比
         lines.append("## BIOS 配置")
         lines.append("")
         lines.append(self._compare_bios())
 
-        # 16. 性能影响分析
+        # 18. 性能影响分析
         lines.append("## 性能影响分析")
         lines.append("")
         lines.append(self._analyze_performance_impact())
@@ -846,6 +856,93 @@ class PerfComparator:
             values = [cfg.system_services.get(service, 'NA') for cfg in self.configs]
             diff = self._compare_values(values)
             rows.append([service] + values + [diff])
+
+        return self._format_table(rows)
+
+    # ========== SELinux 对比 ==========
+    def _compare_selinux(self) -> str:
+        """对比 SELinux 状态"""
+        rows = [self._get_headers()]
+
+        # SELinux 状态
+        status_values = []
+        for cfg in self.configs:
+            selinux = cfg.selinux
+            if isinstance(selinux, dict):
+                status_values.append(selinux.get('status', 'NA'))
+            else:
+                status_values.append('NA')
+        rows.append(['SELinux 状态'] + status_values + [self._compare_values(status_values)])
+
+        # SELinux 模式
+        mode_values = []
+        for cfg in self.configs:
+            selinux = cfg.selinux
+            if isinstance(selinux, dict):
+                mode_values.append(selinux.get('mode', 'NA'))
+            else:
+                mode_values.append('NA')
+        rows.append(['SELinux 模式'] + mode_values + [self._compare_values(mode_values)])
+
+        return self._format_table(rows)
+
+    # ========== 防火墙对比 ==========
+    def _compare_firewall(self) -> str:
+        """对比防火墙状态"""
+        rows = [self._get_headers()]
+
+        # firewalld 状态
+        firewalld_values = []
+        for cfg in self.configs:
+            firewall = cfg.firewall
+            if isinstance(firewall, dict) and 'firewalld' in firewall:
+                fw_info = firewall['firewalld']
+                if isinstance(fw_info, dict):
+                    state = fw_info.get('state', 'NA')
+                    available = fw_info.get('available', False)
+                    if not available:
+                        firewalld_values.append('未安装')
+                    else:
+                        firewalld_values.append(state)
+                else:
+                    firewalld_values.append('NA')
+            else:
+                firewalld_values.append('NA')
+        rows.append(['firewalld'] + firewalld_values + [self._compare_values(firewalld_values)])
+
+        # ufw 状态
+        ufw_values = []
+        for cfg in self.configs:
+            firewall = cfg.firewall
+            if isinstance(firewall, dict) and 'ufw' in firewall:
+                ufw_info = firewall['ufw']
+                if isinstance(ufw_info, dict):
+                    state = ufw_info.get('state', 'NA')
+                    available = ufw_info.get('available', False)
+                    if not available:
+                        ufw_values.append('未安装')
+                    else:
+                        ufw_values.append(state)
+                else:
+                    ufw_values.append('NA')
+            else:
+                ufw_values.append('NA')
+        rows.append(['ufw'] + ufw_values + [self._compare_values(ufw_values)])
+
+        # iptables 可用性
+        iptables_values = []
+        for cfg in self.configs:
+            firewall = cfg.firewall
+            if isinstance(firewall, dict) and 'iptables' in firewall:
+                ipt_info = firewall['iptables']
+                if isinstance(ipt_info, dict):
+                    available = ipt_info.get('available', False)
+                    iptables_values.append('可用' if available else '不可用')
+                else:
+                    iptables_values.append('NA')
+            else:
+                iptables_values.append('NA')
+        rows.append(['iptables'] + iptables_values + [self._compare_values(iptables_values)])
 
         return self._format_table(rows)
 
