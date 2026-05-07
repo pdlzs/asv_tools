@@ -112,6 +112,7 @@ class SSHClient:
     def _execute_remote(self, command: str, work_dir: Optional[str], stream_output: bool) -> Tuple[bool, str]:
         """远程执行命令"""
         import sys
+        import threading
         full_command = f"cd {work_dir} && bash -s" if work_dir else "bash -s"
 
         try:
@@ -137,27 +138,41 @@ class SSHClient:
                     text=True,
                     bufsize=1
                 )
-                process.stdin.write(command)
-                process.stdin.flush()
-                # 不立即关闭 stdin，等待进程结束后再关闭
-                # 原因：heredoc 结构需要 stdin 保持打开，过早关闭会导致长时间命令失败
 
                 output_lines = []
-                for line in process.stdout:
-                    print(line, end='')
-                    output_lines.append(line)
+                stdout_finished = threading.Event()
 
-                # stdout 读取完成后关闭 stdin
-                # 此时脚本已发送完毕，关闭 stdin 让 SSH 进程能正常退出
+                def read_stdout():
+                    """线程函数：读取 stdout"""
+                    try:
+                        for line in process.stdout:
+                            print(line, end='')
+                            output_lines.append(line)
+                    finally:
+                        stdout_finished.set()
+
+                # 启动 stdout 读取线程
+                reader_thread = threading.Thread(target=read_stdout, daemon=True)
+                reader_thread.start()
+
+                # 发送脚本到 stdin，然后关闭 stdin
+                # 关闭 stdin 后，远程 bash 会看到 EOF，脚本中的 heredoc 能正常解析完成
+                process.stdin.write(command)
+                process.stdin.flush()
                 process.stdin.close()
 
-                # 添加执行超时 (防止无限等待)
+                # 等待 stdout 读取完成或进程超时
                 try:
+                    # 使用 wait 确保 process 退出，同时等待 stdout 线程
                     process.wait(timeout=self.config.execution_timeout)
                 except subprocess.TimeoutExpired:
                     process.kill()
                     process.wait()
                     return False, f"命令执行超时 ({self.config.execution_timeout}秒)"
+
+                # 等待 stdout 线程完成
+                stdout_finished.wait(timeout=5)
+                reader_thread.join(timeout=5)
 
                 output = ''.join(output_lines)
                 return process.returncode == 0, output
