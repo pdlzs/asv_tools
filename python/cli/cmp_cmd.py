@@ -54,11 +54,19 @@ def run_collect_for_cmp(config: Config, output_dir: Path,
 
         if dry_run:
             print(f"[DRY-RUN] 将在 {machine_name} 上执行采集脚本:")
-            collector = PerfCollector(machine, script, verbose)
+            collector = PerfCollector(
+                machine, script, verbose,
+                ssh_timeout=config.runtime.ssh_timeout,
+                execution_timeout=config.runtime.execution_timeout
+            )
             print(collector._build_collect_script())
             continue
 
-        collector = PerfCollector(machine, script, verbose)
+        collector = PerfCollector(
+            machine, script, verbose,
+            ssh_timeout=config.runtime.ssh_timeout,
+            execution_timeout=config.runtime.execution_timeout
+        )
 
         # 测试连接
         if not collector.test_connection():
@@ -185,16 +193,24 @@ def run_compare(args) -> int:
         elif not args.dry_run:
             for name, machine in config.machines.items():
                 script = config.get_compare_script_for_machine(name)
-                if not execute_on_machine(machine, script, args.dry_run, args.verbose,
-                                          export_vars=config.export):
+                if not execute_on_machine(
+                    machine, script, args.dry_run, args.verbose,
+                    export_vars=config.export,
+                    ssh_timeout=config.runtime.ssh_timeout,
+                    execution_timeout=config.runtime.execution_timeout
+                ):
                     print(f"在 {name} 上执行脚本失败", file=sys.stderr)
                     return 1
         else:
             # dry-run 模式下显示脚本
             for name, machine in config.machines.items():
                 script = config.get_compare_script_for_machine(name)
-                execute_on_machine(machine, script, dry_run=True, verbose=args.verbose,
-                                  export_vars=config.export)
+                execute_on_machine(
+                    machine, script, dry_run=True, verbose=args.verbose,
+                    export_vars=config.export,
+                    ssh_timeout=config.runtime.ssh_timeout,
+                    execution_timeout=config.runtime.execution_timeout
+                )
 
         # 9. 下载结果
         server1_name = machine_names[0]
@@ -205,7 +221,10 @@ def run_compare(args) -> int:
 
         for name, machine in config.machines.items():
             target_dir = output_dir / f"{name}_results"
-            if not download_results(machine, target_dir, args.dry_run, args.verbose):
+            if not download_results(
+                machine, target_dir, args.dry_run, args.verbose,
+                ssh_timeout=config.runtime.ssh_timeout
+            ):
                 print(f"从 {name} 下载结果失败", file=sys.stderr)
                 return 1
 

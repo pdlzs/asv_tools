@@ -13,7 +13,8 @@ def download_results(
     machine: MachineConfig,
     local_output_dir: Path,
     dry_run: bool = False,
-    verbose: bool = False
+    verbose: bool = False,
+    ssh_timeout: int = 30
 ) -> bool:
     """
     从机器下载 ASV 结果
@@ -23,6 +24,7 @@ def download_results(
         local_output_dir: 本地输出目录
         dry_run: 是否为干运行模式
         verbose: 是否显示详细输出
+        ssh_timeout: SSH 连接超时 (秒)
 
     Returns:
         成功返回 True
@@ -45,7 +47,7 @@ def download_results(
         host=machine.host,
         username=machine.username or "",
         port=machine.port,
-        timeout=30
+        timeout=ssh_timeout
     )
 
     client = SSHClient(config)

@@ -17,7 +17,8 @@ class SSHConfig:
     host: str
     username: str
     port: int = 22
-    timeout: int = 30
+    timeout: int = 30              # 连接超时 (秒)
+    execution_timeout: int = 3600  # 执行超时 (秒)，默认 1 小时
 
     @property
     def is_local(self) -> bool:
@@ -116,10 +117,13 @@ class SSHClient:
         try:
             if stream_output:
                 # 实时输出模式
+                # SSH keepalive 选项: 每 30 秒发送心跳，3 次失败后断开 (防止防火墙/NAT 超时)
                 process = subprocess.Popen(
                     [
                         "ssh",
                         "-o", f"ConnectTimeout={self.config.timeout}",
+                        "-o", "ServerAliveInterval=30",
+                        "-o", "ServerAliveCountMax=3",
                         "-o", "BatchMode=yes",
                         "-o", "StrictHostKeyChecking=no",
                         "-p", str(self.config.port),
@@ -140,15 +144,23 @@ class SSHClient:
                     print(line, end='')
                     output_lines.append(line)
 
-                process.wait()
+                # 添加执行超时 (防止无限等待)
+                try:
+                    process.wait(timeout=self.config.execution_timeout)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
+                    return False, f"命令执行超时 ({self.config.execution_timeout}秒)"
                 output = ''.join(output_lines)
                 return process.returncode == 0, output
             else:
-                # 捕获输出模式
+                # 捕获输出模式 - 也添加 keepalive
                 result = subprocess.run(
                     [
                         "ssh",
                         "-o", f"ConnectTimeout={self.config.timeout}",
+                        "-o", "ServerAliveInterval=30",
+                        "-o", "ServerAliveCountMax=3",
                         "-o", "BatchMode=yes",
                         "-o", "StrictHostKeyChecking=no",
                         "-p", str(self.config.port),
@@ -158,7 +170,7 @@ class SSHClient:
                     input=command,
                     capture_output=True,
                     text=True,
-                    timeout=3600  # 1 hour timeout for long ASV runs
+                    timeout=self.config.execution_timeout
                 )
                 output = result.stdout + result.stderr
                 return result.returncode == 0, output

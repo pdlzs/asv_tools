@@ -63,5 +63,6 @@ output:
   custom_info: "docker_test"
 
 runtime:
-  ssh_timeout: 30
+  ssh_timeout: 30           # SSH 连接超时 (秒)
+  execution_timeout: 7200   # 命令执行超时 (秒)，默认 2 小时
   log_level: "INFO"

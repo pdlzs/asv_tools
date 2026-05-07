@@ -25,7 +25,8 @@ class ContOutputConfig:
 @dataclass
 class ContRuntimeConfig:
     """运行时配置"""
-    ssh_timeout: int = 30
+    ssh_timeout: int = 30           # SSH 连接超时 (秒)
+    execution_timeout: int = 3600   # 命令执行超时 (秒)，默认 1 小时
     log_level: str = "INFO"
 
 
@@ -111,6 +112,7 @@ def load_cont_config(config_path: str) -> ContConfig:
     runtime_data = data.get("runtime", {})
     runtime = ContRuntimeConfig(
         ssh_timeout=runtime_data.get("ssh_timeout", 30),
+        execution_timeout=runtime_data.get("execution_timeout", 3600),
         log_level=runtime_data.get("log_level", "INFO")
     )
 

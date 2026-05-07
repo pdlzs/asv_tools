@@ -15,11 +15,20 @@ class CollectOutputConfig:
 
 
 @dataclass
+class CollectRuntimeConfig:
+    """运行时配置"""
+    ssh_timeout: int = 30           # SSH 连接超时 (秒)
+    execution_timeout: int = 300    # 命令执行超时 (秒)，默认 5 分钟（采集命令较快）
+    log_level: str = "INFO"
+
+
+@dataclass
 class CollectConfig:
     """完整采集配置"""
     machines: Dict[str, MachineConfig]
     collect_scripts: Dict[str, str]             # 每台机器的环境初始化脚本
     output: CollectOutputConfig
+    runtime: CollectRuntimeConfig               # 运行时配置
     export: Dict[str, str]                      # 全局环境变量（可选）
 
     def validate(self) -> List[str]:
@@ -71,12 +80,20 @@ def load_collect_config(config_path: str) -> CollectConfig:
     # 解析 output
     output_data = data.get("output", {})
 
+    # 解析 runtime
+    runtime_data = data.get("runtime", {})
+
     return CollectConfig(
         machines=machines,
         collect_scripts=collect_scripts,
         output=CollectOutputConfig(
             dir=output_data.get("dir", "./perf_results"),
             custom_info=output_data.get("custom_info")
+        ),
+        runtime=CollectRuntimeConfig(
+            ssh_timeout=runtime_data.get("ssh_timeout", 30),
+            execution_timeout=runtime_data.get("execution_timeout", 300),
+            log_level=runtime_data.get("log_level", "INFO")
         ),
         export=data.get("export", {})
     )

@@ -42,6 +42,11 @@ output:
   dir: "./collect_results"
   custom_info: "zen4_vs_kp950"
 
+runtime:
+  ssh_timeout: 30           # SSH 连接超时 (秒)
+  execution_timeout: 300    # 命令执行超时 (秒)，采集命令较快，默认 5 分钟
+  log_level: "INFO"
+
 # COLLECT_ENV 使用说明：
 # 采集分为两部分：
 # 1. 宿主机硬件信息（dmidecode、CPU、内存、NUMA、内核参数）- 自动执行

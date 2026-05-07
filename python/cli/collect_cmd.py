@@ -81,7 +81,9 @@ def check_tools_on_machine(machine_name: str, config: CollectConfig, verbose: bo
     ssh_config = SSHConfig(
         host=machine.host,
         username=machine.username or "",
-        port=machine.port
+        port=machine.port,
+        timeout=config.runtime.ssh_timeout,
+        execution_timeout=config.runtime.execution_timeout
     )
     client = SSHClient(ssh_config)
 
@@ -236,7 +238,11 @@ def collect_from_machine(machine_name: str, config: CollectConfig,
     if script and config.export:
         script = build_export_statements(config.export) + render_template(script, **config.export)
 
-    collector = PerfCollector(machine, script, verbose)
+    collector = PerfCollector(
+        machine, script, verbose,
+        ssh_timeout=config.runtime.ssh_timeout,
+        execution_timeout=config.runtime.execution_timeout
+    )
 
     if dry_run:
         print(f"[DRY-RUN] 将在 {machine_name} 上执行采集脚本:")

@@ -180,10 +180,14 @@ echo '=== COLLECT_DONE ==='
 
     def __init__(self, machine: MachineConfig,
                  script: Optional[str] = None,
-                 verbose: bool = False):
+                 verbose: bool = False,
+                 ssh_timeout: int = 30,
+                 execution_timeout: int = 300):
         self.machine = machine
         self.script = script
         self.verbose = verbose
+        self.ssh_timeout = ssh_timeout
+        self.execution_timeout = execution_timeout
         self.ssh_client = self._create_ssh_client()
 
     def _create_ssh_client(self) -> SSHClient:
@@ -191,7 +195,9 @@ echo '=== COLLECT_DONE ==='
         config = SSHConfig(
             host=self.machine.host,
             username=self.machine.username or "",
-            port=self.machine.port
+            port=self.machine.port,
+            timeout=self.ssh_timeout,
+            execution_timeout=self.execution_timeout
         )
         return SSHClient(config)
 

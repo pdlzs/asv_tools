@@ -13,7 +13,9 @@ def execute_on_machine(
     dry_run: bool = False,
     verbose: bool = False,
     stream_output: bool = True,
-    export_vars: Optional[Dict[str, str]] = None
+    export_vars: Optional[Dict[str, str]] = None,
+    ssh_timeout: int = 30,
+    execution_timeout: int = 3600
 ) -> bool:
     """
     在指定机器上执行脚本
@@ -25,6 +27,8 @@ def execute_on_machine(
         verbose: 是否显示详细输出
         stream_output: 是否实时输出脚本执行结果
         export_vars: 全局环境变量字典（可选）
+        ssh_timeout: SSH 连接超时 (秒)
+        execution_timeout: 命令执行超时 (秒)
 
     Returns:
         成功返回 True
@@ -56,7 +60,8 @@ def execute_on_machine(
         host=machine.host,
         username=machine.username or "",
         port=machine.port,
-        timeout=30
+        timeout=ssh_timeout,
+        execution_timeout=execution_timeout
     )
 
     client = SSHClient(config)

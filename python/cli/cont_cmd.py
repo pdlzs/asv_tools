@@ -31,7 +31,8 @@ def run_script_on_machine(machine, config, script: str, dry_run: bool = False) -
         host=machine.host,
         username=machine.username or "",
         port=machine.port,
-        timeout=config.runtime.ssh_timeout
+        timeout=config.runtime.ssh_timeout,
+        execution_timeout=config.runtime.execution_timeout
     )
     ssh_client = SSHClient(ssh_config)
 
