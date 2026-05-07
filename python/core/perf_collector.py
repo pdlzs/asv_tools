@@ -39,6 +39,7 @@ class PerfConfig:
     swap_config: Dict[str, Any]         # Swap 配置
     selinux: Dict[str, str]             # SELinux 状态
     firewall: Dict[str, Any]            # 防火墙状态
+    container: Dict[str, Any]           # 容器环境信息（OS、内核等）
     collect_time: str = ""
 
 
@@ -144,6 +145,11 @@ echo '=== HOST_DONE ==='
 #   docker exec container sh -c "$COLLECT_ENV"   # 进入容器
 #   docker exec container bash -c 'source activate env; eval "$COLLECT_ENV"'  # 容器+conda
 COLLECT_ENV='
+echo "=== CONTAINER_OS_INFO ==="
+uname -m
+cat /etc/os-release 2>/dev/null | grep PRETTY_NAME || echo "NA: /etc/os-release not found"
+uname -r
+
 echo "=== PYTHON_VERSION ==="
 python --version 2>&1 || python3 --version 2>&1 || echo "NA"
 
@@ -275,6 +281,7 @@ echo '=== COLLECT_DONE ==='
             swap_config=self._parse_swap_config(sections.get('SWAP_CONFIG', 'NA')),
             selinux=self._parse_selinux_status(sections.get('SELINUX_STATUS', 'NA')),
             firewall=self._parse_firewall_status(sections.get('FIREWALL_STATUS', 'NA')),
+            container=self._parse_container_info(sections.get('CONTAINER_OS_INFO', 'NA')),
             collect_time=collect_time
         )
 
@@ -1034,6 +1041,39 @@ echo '=== COLLECT_DONE ==='
 
         return info
 
+    def _parse_container_info(self, raw: str) -> Dict[str, Any]:
+        """解析容器环境信息（CONTAINER_OS_INFO）"""
+        info: Dict[str, Any] = {'raw': raw}
+        if raw == 'NA' or raw.startswith('NA:'):
+            info['available'] = False
+            info['os'] = 'NA'
+            info['kernel'] = 'NA'
+            info['architecture'] = 'NA'
+            return info
+
+        info['available'] = True
+        lines = raw.split('\n')
+        for line in lines:
+            if line.startswith('PRETTY_NAME='):
+                info['os'] = line.split('=')[1].strip('"')
+            elif not line.startswith('NA:') and 'Architecture:' not in line:
+                # uname -m 输出在第一行
+                if line.strip() in ['x86_64', 'aarch64', 'armv7l', 'i686']:
+                    info['architecture'] = line.strip()
+                # 内核版本（通常是数字开头）
+                elif line.strip() and line.strip()[0].isdigit():
+                    info['kernel'] = line.strip()
+
+        # 确保字段存在
+        if 'os' not in info:
+            info['os'] = 'NA'
+        if 'kernel' not in info:
+            info['kernel'] = 'NA'
+        if 'architecture' not in info:
+            info['architecture'] = 'NA'
+
+        return info
+
     def _create_empty_config(self, error_msg: str) -> PerfConfig:
         """创建空配置（用于失败情况）"""
         return PerfConfig(
@@ -1056,6 +1096,7 @@ echo '=== COLLECT_DONE ==='
             swap_config={'error': error_msg},
             selinux={'status': 'NA', 'mode': 'NA'},
             firewall={'error': error_msg},
+            container={'available': False, 'os': 'NA', 'kernel': 'NA', 'architecture': 'NA'},
             collect_time=""
         )
 
@@ -1089,6 +1130,7 @@ def perf_config_to_yaml(config: PerfConfig) -> str:
         'swap_config': config.swap_config,
         'selinux': config.selinux,
         'firewall': config.firewall,
+        'container': config.container,
     }
 
     return yaml.dump(data, default_flow_style=False, allow_unicode=True, sort_keys=False)

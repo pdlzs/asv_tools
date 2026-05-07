@@ -106,12 +106,17 @@ class PerfComparator:
         lines.append("")
         lines.append(self._compare_firewall())
 
-        # 17. BIOS 配置对比
+        # 17. 容器环境对比
+        lines.append("## 容器环境对比")
+        lines.append("")
+        lines.append(self._compare_container())
+
+        # 18. BIOS 配置对比
         lines.append("## BIOS 配置")
         lines.append("")
         lines.append(self._compare_bios())
 
-        # 18. 性能影响分析
+        # 19. 性能影响分析
         lines.append("## 性能影响分析")
         lines.append("")
         lines.append(self._analyze_performance_impact())
@@ -943,6 +948,54 @@ class PerfComparator:
             else:
                 iptables_values.append('NA')
         rows.append(['iptables'] + iptables_values + [self._compare_values(iptables_values)])
+
+        return self._format_table(rows)
+
+    # ========== 容器环境对比 ==========
+    def _compare_container(self) -> str:
+        """对比容器环境信息"""
+        rows = [self._get_headers()]
+
+        # 容器信息是否采集
+        available_values = []
+        for cfg in self.configs:
+            container = cfg.container
+            if isinstance(container, dict):
+                available = container.get('available', False)
+                available_values.append('已采集' if available else '未采集')
+            else:
+                available_values.append('NA')
+        rows.append(['容器信息'] + available_values + [self._compare_values(available_values)])
+
+        # 容器 OS
+        os_values = []
+        for cfg in self.configs:
+            container = cfg.container
+            if isinstance(container, dict):
+                os_values.append(container.get('os', 'NA'))
+            else:
+                os_values.append('NA')
+        rows.append(['容器操作系统'] + os_values + [self._compare_values(os_values)])
+
+        # 容器内核（注意：容器共享宿主机内核，但可能显示不同）
+        kernel_values = []
+        for cfg in self.configs:
+            container = cfg.container
+            if isinstance(container, dict):
+                kernel_values.append(container.get('kernel', 'NA'))
+            else:
+                kernel_values.append('NA')
+        rows.append(['容器内核版本'] + kernel_values + [self._compare_values(kernel_values)])
+
+        # 容器架构
+        arch_values = []
+        for cfg in self.configs:
+            container = cfg.container
+            if isinstance(container, dict):
+                arch_values.append(container.get('architecture', 'NA'))
+            else:
+                arch_values.append('NA')
+        rows.append(['容器架构'] + arch_values + [self._compare_values(arch_values)])
 
         return self._format_table(rows)
 
