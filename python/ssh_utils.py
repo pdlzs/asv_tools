@@ -117,13 +117,14 @@ class SSHClient:
         try:
             if stream_output:
                 # 实时输出模式
-                # SSH keepalive 选项: 每 30 秒发送心跳，3 次失败后断开 (防止防火墙/NAT 超时)
+                # SSH keepalive 选项: 每 30 秒发送心跳，容忍 4 小时无响应 (480 次 × 30 秒)
+                # 适应长时间运行的 benchmark (如 ASV run 持续 2+ 小时)
                 process = subprocess.Popen(
                     [
                         "ssh",
                         "-o", f"ConnectTimeout={self.config.timeout}",
                         "-o", "ServerAliveInterval=30",
-                        "-o", "ServerAliveCountMax=3",
+                        "-o", "ServerAliveCountMax=480",
                         "-o", "BatchMode=yes",
                         "-o", "StrictHostKeyChecking=no",
                         "-p", str(self.config.port),
@@ -137,7 +138,9 @@ class SSHClient:
                     bufsize=1
                 )
                 process.stdin.write(command)
-                process.stdin.close()
+                process.stdin.flush()
+                # 不立即关闭 stdin，等待进程结束后再关闭
+                # 原因：heredoc 结构需要 stdin 保持打开，过早关闭会导致长时间命令失败
 
                 output_lines = []
                 for line in process.stdout:
@@ -151,16 +154,19 @@ class SSHClient:
                     process.kill()
                     process.wait()
                     return False, f"命令执行超时 ({self.config.execution_timeout}秒)"
+
+                # 进程结束后关闭 stdin
+                process.stdin.close()
                 output = ''.join(output_lines)
                 return process.returncode == 0, output
             else:
-                # 捕获输出模式 - 也添加 keepalive
+                # 捕获输出模式 - 也添加 keepalive (适应长时间运行)
                 result = subprocess.run(
                     [
                         "ssh",
                         "-o", f"ConnectTimeout={self.config.timeout}",
                         "-o", "ServerAliveInterval=30",
-                        "-o", "ServerAliveCountMax=3",
+                        "-o", "ServerAliveCountMax=480",
                         "-o", "BatchMode=yes",
                         "-o", "StrictHostKeyChecking=no",
                         "-p", str(self.config.port),
