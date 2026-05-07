@@ -147,6 +147,10 @@ class SSHClient:
                     print(line, end='')
                     output_lines.append(line)
 
+                # stdout 读取完成后关闭 stdin
+                # 此时脚本已发送完毕，关闭 stdin 让 SSH 进程能正常退出
+                process.stdin.close()
+
                 # 添加执行超时 (防止无限等待)
                 try:
                     process.wait(timeout=self.config.execution_timeout)
@@ -155,8 +159,6 @@ class SSHClient:
                     process.wait()
                     return False, f"命令执行超时 ({self.config.execution_timeout}秒)"
 
-                # 进程结束后关闭 stdin
-                process.stdin.close()
                 output = ''.join(output_lines)
                 return process.returncode == 0, output
             else:
