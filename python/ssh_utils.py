@@ -113,6 +113,7 @@ class SSHClient:
         """远程执行命令"""
         import sys
         import threading
+        import time
         full_command = f"cd {work_dir} && bash -s" if work_dir else "bash -s"
 
         try:
@@ -136,42 +137,53 @@ class SSHClient:
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
                     text=True,
-                    bufsize=1
+                    bufsize=0  # 无缓冲
                 )
 
+                stdin_closed = False
                 output_lines = []
-                stdout_finished = threading.Event()
 
                 def read_stdout():
-                    """线程函数：读取 stdout"""
+                    """线程函数：读取 stdout 并实时打印"""
                     try:
                         for line in process.stdout:
                             print(line, end='')
                             output_lines.append(line)
-                    finally:
-                        stdout_finished.set()
+                    except Exception:
+                        pass
 
                 # 启动 stdout 读取线程
                 reader_thread = threading.Thread(target=read_stdout, daemon=True)
                 reader_thread.start()
 
-                # 发送脚本到 stdin，然后关闭 stdin
-                # 关闭 stdin 后，远程 bash 会看到 EOF，脚本中的 heredoc 能正常解析完成
+                # 发送脚本到 stdin
                 process.stdin.write(command)
                 process.stdin.flush()
-                process.stdin.close()
 
-                # 等待 stdout 读取完成或进程超时
+                # 等待 10 秒确保脚本完全发送并被远程接收
+                # docker exec -i 需要完整接收 heredoc 内容才能正常执行
+                # 这段时间内不关闭 stdin，让远程 bash 有足够时间解析并发送给 docker
+                time.sleep(10)
+
+                # 关闭 stdin
+                process.stdin.close()
+                stdin_closed = True
+
+                # 等待进程完成或超时
                 try:
-                    # 使用 wait 确保 process 退出，同时等待 stdout 线程
                     process.wait(timeout=self.config.execution_timeout)
                 except subprocess.TimeoutExpired:
                     process.kill()
                     process.wait()
+                    if not stdin_closed:
+                        process.stdin.close()
                     return False, f"命令执行超时 ({self.config.execution_timeout}秒)"
 
+                # 确保 stdin 已关闭
+                if not stdin_closed:
+                    process.stdin.close()
+
                 # 等待 stdout 线程完成
-                stdout_finished.wait(timeout=5)
                 reader_thread.join(timeout=5)
 
                 output = ''.join(output_lines)
