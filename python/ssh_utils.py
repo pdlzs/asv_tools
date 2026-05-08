@@ -113,8 +113,12 @@ class SSHClient:
         """远程执行命令"""
         import sys
         import threading
-        import time
         full_command = f"cd {work_dir} && bash -s" if work_dir else "bash -s"
+
+        # DEBUG: 打印脚本信息
+        print(f"[DEBUG] 远程执行命令到 {self.config.host}")
+        print(f"[DEBUG] 脚本长度: {len(command)} 字符")
+        print(f"[DEBUG] execution_timeout: {self.config.execution_timeout} 秒")
 
         try:
             if stream_output:
@@ -137,56 +141,80 @@ class SSHClient:
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
                     text=True,
-                    bufsize=0  # 无缓冲
+                    bufsize=0
                 )
 
-                stdin_closed = False
+                print(f"[DEBUG] SSH 进程已启动, PID: {process.pid}")
+
                 output_lines = []
+                stdout_read_count = 0
+                exception_in_reader = None
 
                 def read_stdout():
                     """线程函数：读取 stdout 并实时打印"""
+                    nonlocal stdout_read_count, exception_in_reader
                     try:
                         for line in process.stdout:
                             print(line, end='')
                             output_lines.append(line)
-                    except Exception:
-                        pass
+                            stdout_read_count += 1
+                    except Exception as e:
+                        exception_in_reader = str(e)
+                        print(f"[DEBUG] stdout 读取线程异常: {e}")
 
-                # 启动 stdout 读取线程
+                # 启动 stdout 读取线程（必须先启动，否则可能阻塞）
                 reader_thread = threading.Thread(target=read_stdout, daemon=True)
                 reader_thread.start()
+                print(f"[DEBUG] stdout 读取线程已启动")
 
-                # 发送脚本到 stdin
+                # 发送脚本并立即关闭 stdin
+                # 脚本中的 heredoc 在发送时就完整包含在 stdin buffer 中
+                # 远程 bash 解析 heredoc 时从 buffer 读取，stdin 关闭不影响已发送内容
+                print(f"[DEBUG] 开始写入脚本到 stdin...")
                 process.stdin.write(command)
                 process.stdin.flush()
-
-                # 等待 10 秒确保脚本完全发送并被远程接收
-                # docker exec -i 需要完整接收 heredoc 内容才能正常执行
-                # 这段时间内不关闭 stdin，让远程 bash 有足够时间解析并发送给 docker
-                time.sleep(10)
-
-                # 关闭 stdin
+                print(f"[DEBUG] 脚本已写入 stdin, 准备关闭 stdin...")
                 process.stdin.close()
-                stdin_closed = True
+                print(f"[DEBUG] stdin 已关闭")
 
                 # 等待进程完成或超时
+                print(f"[DEBUG] 开始等待进程完成 (最长 {self.config.execution_timeout} 秒)...")
                 try:
                     process.wait(timeout=self.config.execution_timeout)
+                    print(f"[DEBUG] 进程已结束, returncode: {process.returncode}")
                 except subprocess.TimeoutExpired:
+                    print(f"[DEBUG] 进程超时, 正在终止...")
                     process.kill()
                     process.wait()
-                    if not stdin_closed:
-                        process.stdin.close()
+                    print(f"[DEBUG] 进程已终止, returncode: {process.returncode}")
                     return False, f"命令执行超时 ({self.config.execution_timeout}秒)"
 
-                # 确保 stdin 已关闭
-                if not stdin_closed:
-                    process.stdin.close()
-
                 # 等待 stdout 线程完成
+                print(f"[DEBUG] 等待 stdout 线程完成...")
                 reader_thread.join(timeout=5)
+                print(f"[DEBUG] stdout 线程已完成")
+                print(f"[DEBUG] stdout 读取行数: {stdout_read_count}")
+                if exception_in_reader:
+                    print(f"[DEBUG] stdout 线程曾有异常: {exception_in_reader}")
 
                 output = ''.join(output_lines)
+
+                # DEBUG: 打印最终结果
+                print(f"[DEBUG] 最终 returncode: {process.returncode}")
+                print(f"[DEBUG] 输出长度: {len(output)} 字符")
+
+                # 如果 returncode != 0, 打印更多诊断信息
+                if process.returncode != 0:
+                    print(f"[DEBUG] ===== 执行失败诊断信息 =====")
+                    print(f"[DEBUG] SSH 命令: ssh {self.config.username}@{self.config.host} '{full_command}'")
+                    print(f"[DEBUG] 脚本内容预览 (前 500 字符):")
+                    print(command[:500])
+                    print(f"[DEBUG] 脚本内容预览 (最后 500 字符):")
+                    print(command[-500:])
+                    print(f"[DEBUG] 输出内容预览 (最后 1000 字符):")
+                    print(output[-1000:] if len(output) > 1000 else output)
+                    print(f"[DEBUG] ===== 诊断信息结束 =====")
+
                 return process.returncode == 0, output
             else:
                 # 捕获输出模式 - 也添加 keepalive (适应长时间运行)
