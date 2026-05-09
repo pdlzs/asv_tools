@@ -1,0 +1,1717 @@
+# ASV Benchmark 对比配置文件
+# 使用方法: python main.py cmp cmp.yaml
+
+machines:
+  server1:
+    host: 47.102.42.48
+    hostname: "zen4"
+    port: 22
+    username: luozisheng
+    identity_file: "/home/luo/.ssh/shared_ed25519"
+    asv_project_dir: /home/luozisheng/numpy/benchmarks
+
+  server2:
+    host: 116.205.130.173
+    hostname: "920b"
+    port: 22
+    username: luozisheng
+    identity_file: "/home/luo/.ssh/shared_ed25519"
+    asv_project_dir: /home/luozisheng/numpy/benchmarks
+
+compare_scripts:
+  server1: |
+    export CONDA_NAME=l00668690
+    export BASE_DIR=/home/luozisheng
+    cd ${BASE_DIR}/numpy/benchmarks
+
+    rm -rf results
+
+    # 确保临时目录存在（宿主机和容器内）
+    mkdir -p /home/luozisheng/tmp
+    docker exec mycontainer mkdir -p /home/luozisheng/tmp
+
+    # 创建临时脚本文件
+    cat > /home/luozisheng/tmp/docker_script.sh <<'INNER_EOF'
+    source /opt/rh/gcc-toolset-12/enable
+    export BASE_DIR=/home/luozisheng
+    export CONDA_NAME=l00668690
+    export OPENBLAS_NUM_THREADS=4
+    source /home/miniconda3/bin/activate && conda activate ${CONDA_NAME}
+    cd ${BASE_DIR}/numpy/benchmarks
+    rm -rf results
+    asv machine --yes
+    git config --global http.sslVerify false
+    git config --global --add safe.directory ${BASE_DIR}/numpy
+    git config --global --add safe.directory ${BASE_DIR}/numpy/.git
+    asv run \
+      -b "bench_core.StatsMethods.time_mean.'bool_', 100." \
+      -b "bench_core.StatsMethods.time_mean.'bool_', 10000." \
+      -b "bench_core.StatsMethods.time_mean.'float32', 100." \
+      -b "bench_core.StatsMethods.time_mean.'float32', 10000." \
+      -b "bench_core.StatsMethods.time_mean.'float64', 100." \
+      -b "bench_core.StatsMethods.time_mean.'float64', 10000." \
+      -b "bench_core.StatsMethods.time_mean.'int64', 100." \
+      -b "bench_core.StatsMethods.time_mean.'int64', 10000." \
+      -b "bench_core.StatsMethods.time_mean.'uint64', 100." \
+      -b "bench_core.StatsMethods.time_mean.'uint64', 10000." \
+      -b "bench_core.StatsMethods.time_std.'bool_', 100." \
+      -b "bench_core.StatsMethods.time_std.'bool_', 10000." \
+      -b "bench_core.StatsMethods.time_std.'float32', 100." \
+      -b "bench_core.StatsMethods.time_std.'float32', 10000." \
+      -b "bench_core.StatsMethods.time_std.'float64', 100." \
+      -b "bench_core.StatsMethods.time_std.'float64', 10000." \
+      -b "bench_core.StatsMethods.time_std.'int64', 100." \
+      -b "bench_core.StatsMethods.time_std.'int64', 10000." \
+      -b "bench_core.StatsMethods.time_std.'uint64', 100." \
+      -b "bench_core.StatsMethods.time_std.'uint64', 10000." \
+      -b "bench_indexing.Indexing.time_op.'O,i', 'indexes_', ':,I', ''." \
+      -b "bench_indexing.Indexing.time_op.'O,i', 'indexes_', ':,I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'O,i', 'indexes_', 'I', ''." \
+      -b "bench_indexing.Indexing.time_op.'O,i', 'indexes_', 'I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'O,i', 'indexes_', 'np.ix_.I, I.', ''." \
+      -b "bench_indexing.Indexing.time_op.'O,i', 'indexes_', 'np.ix_.I, I.', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'O,i', 'indexes_rand_', ':,I', ''." \
+      -b "bench_indexing.Indexing.time_op.'O,i', 'indexes_rand_', ':,I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'O,i', 'indexes_rand_', 'I', ''." \
+      -b "bench_indexing.Indexing.time_op.'O,i', 'indexes_rand_', 'I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'O,i', 'indexes_rand_', 'np.ix_.I, I.', ''." \
+      -b "bench_indexing.Indexing.time_op.'O,i', 'indexes_rand_', 'np.ix_.I, I.', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'float32', 'indexes_', ':,I', ''." \
+      -b "bench_indexing.Indexing.time_op.'float32', 'indexes_', ':,I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'float32', 'indexes_', 'I', ''." \
+      -b "bench_indexing.Indexing.time_op.'float32', 'indexes_', 'I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'float32', 'indexes_', 'np.ix_.I, I.', ''." \
+      -b "bench_indexing.Indexing.time_op.'float32', 'indexes_', 'np.ix_.I, I.', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'float32', 'indexes_rand_', ':,I', ''." \
+      -b "bench_indexing.Indexing.time_op.'float32', 'indexes_rand_', ':,I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'float32', 'indexes_rand_', 'I', ''." \
+      -b "bench_indexing.Indexing.time_op.'float32', 'indexes_rand_', 'I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'float32', 'indexes_rand_', 'np.ix_.I, I.', ''." \
+      -b "bench_indexing.Indexing.time_op.'float32', 'indexes_rand_', 'np.ix_.I, I.', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'float64', 'indexes_', ':,I', ''." \
+      -b "bench_indexing.Indexing.time_op.'float64', 'indexes_', ':,I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'float64', 'indexes_', 'I', ''." \
+      -b "bench_indexing.Indexing.time_op.'float64', 'indexes_', 'I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'float64', 'indexes_', 'np.ix_.I, I.', ''." \
+      -b "bench_indexing.Indexing.time_op.'float64', 'indexes_', 'np.ix_.I, I.', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'float64', 'indexes_rand_', ':,I', ''." \
+      -b "bench_indexing.Indexing.time_op.'float64', 'indexes_rand_', ':,I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'float64', 'indexes_rand_', 'I', ''." \
+      -b "bench_indexing.Indexing.time_op.'float64', 'indexes_rand_', 'I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'float64', 'indexes_rand_', 'np.ix_.I, I.', ''." \
+      -b "bench_indexing.Indexing.time_op.'float64', 'indexes_rand_', 'np.ix_.I, I.', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'int16', 'indexes_', ':,I', ''." \
+      -b "bench_indexing.Indexing.time_op.'int16', 'indexes_', ':,I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'int16', 'indexes_', 'I', ''." \
+      -b "bench_indexing.Indexing.time_op.'int16', 'indexes_', 'I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'int16', 'indexes_', 'np.ix_.I, I.', ''." \
+      -b "bench_indexing.Indexing.time_op.'int16', 'indexes_', 'np.ix_.I, I.', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'int16', 'indexes_rand_', ':,I', ''." \
+      -b "bench_indexing.Indexing.time_op.'int16', 'indexes_rand_', ':,I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'int16', 'indexes_rand_', 'I', ''." \
+      -b "bench_indexing.Indexing.time_op.'int16', 'indexes_rand_', 'I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'int16', 'indexes_rand_', 'np.ix_.I, I.', ''." \
+      -b "bench_indexing.Indexing.time_op.'int16', 'indexes_rand_', 'np.ix_.I, I.', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'int32', 'indexes_', ':,I', ''." \
+      -b "bench_indexing.Indexing.time_op.'int32', 'indexes_', ':,I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'int32', 'indexes_', 'I', ''." \
+      -b "bench_indexing.Indexing.time_op.'int32', 'indexes_', 'I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'int32', 'indexes_', 'np.ix_.I, I.', ''." \
+      -b "bench_indexing.Indexing.time_op.'int32', 'indexes_', 'np.ix_.I, I.', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'int32', 'indexes_rand_', ':,I', ''." \
+      -b "bench_indexing.Indexing.time_op.'int32', 'indexes_rand_', ':,I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'int32', 'indexes_rand_', 'I', ''." \
+      -b "bench_indexing.Indexing.time_op.'int32', 'indexes_rand_', 'I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'int32', 'indexes_rand_', 'np.ix_.I, I.', ''." \
+      -b "bench_indexing.Indexing.time_op.'int32', 'indexes_rand_', 'np.ix_.I, I.', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'int64', 'indexes_', ':,I', ''." \
+      -b "bench_indexing.Indexing.time_op.'int64', 'indexes_', ':,I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'int64', 'indexes_', 'I', ''." \
+      -b "bench_indexing.Indexing.time_op.'int64', 'indexes_', 'I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'int64', 'indexes_', 'np.ix_.I, I.', ''." \
+      -b "bench_indexing.Indexing.time_op.'int64', 'indexes_', 'np.ix_.I, I.', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'int64', 'indexes_rand_', ':,I', ''." \
+      -b "bench_indexing.Indexing.time_op.'int64', 'indexes_rand_', ':,I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'int64', 'indexes_rand_', 'I', ''." \
+      -b "bench_indexing.Indexing.time_op.'int64', 'indexes_rand_', 'I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'int64', 'indexes_rand_', 'np.ix_.I, I.', ''." \
+      -b "bench_indexing.Indexing.time_op.'int64', 'indexes_rand_', 'np.ix_.I, I.', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'object', 'indexes_', ':,I', ''." \
+      -b "bench_indexing.Indexing.time_op.'object', 'indexes_', ':,I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'object', 'indexes_', 'I', ''." \
+      -b "bench_indexing.Indexing.time_op.'object', 'indexes_', 'I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'object', 'indexes_', 'np.ix_.I, I.', ''." \
+      -b "bench_indexing.Indexing.time_op.'object', 'indexes_', 'np.ix_.I, I.', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'object', 'indexes_rand_', ':,I', ''." \
+      -b "bench_indexing.Indexing.time_op.'object', 'indexes_rand_', ':,I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'object', 'indexes_rand_', 'I', ''." \
+      -b "bench_indexing.Indexing.time_op.'object', 'indexes_rand_', 'I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'object', 'indexes_rand_', 'np.ix_.I, I.', ''." \
+      -b "bench_indexing.Indexing.time_op.'object', 'indexes_rand_', 'np.ix_.I, I.', '=1'." \
+      -b "bench_indexing.IndexingSeparate.time_mmap_fancy_indexing" \
+      -b "bench_indexing.IndexingSeparate.time_mmap_slicing" \
+      -b "bench_indexing.IndexingStructured0D.time_array_all" \
+      -b "bench_indexing.IndexingStructured0D.time_array_slice" \
+      -b "bench_indexing.IndexingStructured0D.time_scalar_all" \
+      -b "bench_indexing.IndexingStructured0D.time_scalar_slice" \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000, 1., 'O'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000, 1., 'float32'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000, 1., 'float64'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000, 1., 'i,O'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000, 1., 'int16'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000, 1., 'int32'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000, 1., 'int64'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000, 2., 'O'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000, 2., 'float32'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000, 2., 'float64'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000, 2., 'i,O'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000, 2., 'int16'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000, 2., 'int32'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000, 2., 'int64'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000, 3., 'O'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000, 3., 'float32'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000, 3., 'float64'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000, 3., 'i,O'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000, 3., 'int16'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000, 3., 'int32'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000, 3., 'int64'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000,., 'O'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000,., 'float32'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000,., 'float64'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000,., 'i,O'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000,., 'int16'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000,., 'int32'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000,., 'int64'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..2, 1000, 1., 'O'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..2, 1000, 1., 'float32'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..2, 1000, 1., 'float64'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..2, 1000, 1., 'i,O'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..2, 1000, 1., 'int16'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..2, 1000, 1., 'int32'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..2, 1000, 1., 'int64'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000, 1., 'O'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000, 1., 'float32'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000, 1., 'float64'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000, 1., 'i,O'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000, 1., 'int16'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000, 1., 'int32'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000, 1., 'int64'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000, 2., 'O'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000, 2., 'float32'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000, 2., 'float64'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000, 2., 'i,O'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000, 2., 'int16'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000, 2., 'int32'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000, 2., 'int64'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000, 3., 'O'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000, 3., 'float32'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000, 3., 'float64'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000, 3., 'i,O'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000, 3., 'int16'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000, 3., 'int32'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000, 3., 'int64'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000,., 'O'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000,., 'float32'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000,., 'float64'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000,., 'i,O'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000,., 'int16'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000,., 'int32'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000,., 'int64'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..2, 1000, 1., 'O'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..2, 1000, 1., 'float32'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..2, 1000, 1., 'float64'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..2, 1000, 1., 'i,O'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..2, 1000, 1., 'int16'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..2, 1000, 1., 'int32'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..2, 1000, 1., 'int64'." \
+      -b "bench_reduce.ArgMax.time_argmax.<class 'bool'>." \
+      -b "bench_reduce.ArgMax.time_argmax.<class 'numpy.float32'>." \
+      -b "bench_reduce.ArgMax.time_argmax.<class 'numpy.float64'>." \
+      -b "bench_reduce.ArgMax.time_argmax.<class 'numpy.int16'>." \
+      -b "bench_reduce.ArgMax.time_argmax.<class 'numpy.int32'>." \
+      -b "bench_reduce.ArgMax.time_argmax.<class 'numpy.int64'>." \
+      -b "bench_reduce.ArgMax.time_argmax.<class 'numpy.int8'>." \
+      -b "bench_reduce.ArgMax.time_argmax.<class 'numpy.uint16'>." \
+      -b "bench_reduce.ArgMax.time_argmax.<class 'numpy.uint32'>." \
+      -b "bench_reduce.ArgMax.time_argmax.<class 'numpy.uint64'>." \
+      -b "bench_reduce.ArgMax.time_argmax.<class 'numpy.uint8'>." \
+      -b "bench_reduce.StatsReductions.time_mean.'bool_'." \
+      -b "bench_reduce.StatsReductions.time_mean.'float32'." \
+      -b "bench_reduce.StatsReductions.time_mean.'float64'." \
+      -b "bench_reduce.StatsReductions.time_mean.'int64'." \
+      -b "bench_reduce.StatsReductions.time_mean.'uint64'." \
+      -b "bench_reduce.StatsReductions.time_std.'bool_'." \
+      -b "bench_reduce.StatsReductions.time_std.'float32'." \
+      -b "bench_reduce.StatsReductions.time_std.'float64'." \
+      -b "bench_reduce.StatsReductions.time_std.'int64'." \
+      -b "bench_reduce.StatsReductions.time_std.'uint64'." \
+      -b "bench_ufunc.NDArrayAsType.time_astype..'float32', 'float64'.." \
+      -b "bench_ufunc.NDArrayAsType.time_astype..'float32', 'int64'.." \
+      -b "bench_ufunc.NDArrayAsType.time_astype..'int16', 'float32'.." \
+      -b "bench_ufunc.NDArrayAsType.time_astype..'int16', 'float64'.." \
+      -b "bench_ufunc.NDArrayAsType.time_astype..'int16', 'int32'.." \
+      -b "bench_ufunc.NDArrayAsType.time_astype..'int16', 'int64'.." \
+      -b "bench_ufunc.NDArrayAsType.time_astype..'int32', 'float32'.." \
+      -b "bench_ufunc.NDArrayAsType.time_astype..'int32', 'float64'.." \
+      -b "bench_ufunc.NDArrayAsType.time_astype..'int32', 'int64'.." \
+      -b "bench_ufunc.NDArrayAsType.time_astype..'int64', 'float64'.." \
+      -b "bench_ufunc.UFunc.time_ufunc_types.'abs'." \
+      -b "bench_ufunc.UFunc.time_ufunc_types.'add'." \
+      -b "bench_ufunc.UFunc.time_ufunc_types.'divide'." \
+      -b "bench_ufunc.UFunc.time_ufunc_types.'exp'." \
+      -b "bench_ufunc.UFunc.time_ufunc_types.'multiply'." \
+      -b "bench_ufunc.UFunc.time_ufunc_types.'sin'." \
+      -b "bench_ufunc.UFunc.time_ufunc_types.'subtract'." \
+      -b "bench_ufunc.UFuncSmall.time_ufunc_numpy_scalar.'abs'." \
+      -b "bench_ufunc.UFuncSmall.time_ufunc_numpy_scalar.'cos'." \
+      -b "bench_ufunc.UFuncSmall.time_ufunc_numpy_scalar.'sqrt'." \
+      -b "bench_ufunc.UFuncSmall.time_ufunc_python_float.'abs'." \
+      -b "bench_ufunc.UFuncSmall.time_ufunc_python_float.'cos'." \
+      -b "bench_ufunc.UFuncSmall.time_ufunc_python_float.'sqrt'." \
+      -b "bench_ufunc.UFuncSmall.time_ufunc_small_array.'abs'." \
+      -b "bench_ufunc.UFuncSmall.time_ufunc_small_array.'cos'." \
+      -b "bench_ufunc.UFuncSmall.time_ufunc_small_array.'sqrt'." \
+      -b "bench_ufunc.UFuncSmall.time_ufunc_small_array_inplace.'abs'." \
+      -b "bench_ufunc.UFuncSmall.time_ufunc_small_array_inplace.'cos'." \
+      -b "bench_ufunc.UFuncSmall.time_ufunc_small_array_inplace.'sqrt'." \
+      -b "bench_ufunc.UFuncSmall.time_ufunc_small_int_array.'abs'." \
+      -b "bench_ufunc.UFuncSmall.time_ufunc_small_int_array.'cos'." \
+      -b "bench_ufunc.UFuncSmall.time_ufunc_small_int_array.'sqrt'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'exp'>, 1, 1, 'd'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'exp'>, 1, 1, 'e'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'exp'>, 1, 1, 'f'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'exp'>, 1, 2, 'd'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'exp'>, 1, 2, 'e'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'exp'>, 1, 2, 'f'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'exp'>, 4, 1, 'd'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'exp'>, 4, 1, 'e'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'exp'>, 4, 1, 'f'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'exp'>, 4, 2, 'd'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'exp'>, 4, 2, 'e'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'exp'>, 4, 2, 'f'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'sin'>, 1, 1, 'd'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'sin'>, 1, 1, 'e'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'sin'>, 1, 1, 'f'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'sin'>, 1, 2, 'd'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'sin'>, 1, 2, 'e'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'sin'>, 1, 2, 'f'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'sin'>, 4, 1, 'd'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'sin'>, 4, 1, 'e'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'sin'>, 4, 1, 'f'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'sin'>, 4, 2, 'd'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'sin'>, 4, 2, 'e'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'sin'>, 4, 2, 'f'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'exp'>, 1, 1, 'd'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'exp'>, 1, 1, 'e'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'exp'>, 1, 1, 'f'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'exp'>, 1, 2, 'd'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'exp'>, 1, 2, 'e'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'exp'>, 1, 2, 'f'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'exp'>, 4, 1, 'd'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'exp'>, 4, 1, 'e'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'exp'>, 4, 1, 'f'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'exp'>, 4, 2, 'd'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'exp'>, 4, 2, 'e'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'exp'>, 4, 2, 'f'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'sin'>, 1, 1, 'd'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'sin'>, 1, 1, 'e'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'sin'>, 1, 1, 'f'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'sin'>, 1, 2, 'd'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'sin'>, 1, 2, 'e'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'sin'>, 1, 2, 'f'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'sin'>, 4, 1, 'd'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'sin'>, 4, 1, 'e'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'sin'>, 4, 1, 'f'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'sin'>, 4, 2, 'd'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'sin'>, 4, 2, 'e'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'sin'>, 4, 2, 'f'." \
+      -b "bench_function_base.Histogram1D.time_fine_binning" \
+      -b "bench_function_base.Histogram1D.time_full_coverage" \
+      -b "bench_function_base.Histogram1D.time_small_coverage" \
+      -b "bench_function_base.Histogram2D.time_fine_binning" \
+      -b "bench_function_base.Histogram2D.time_full_coverage" \
+      -b "bench_function_base.Histogram2D.time_small_coverage" \
+      -b "bench_function_base.Linspace.time_linspace_array" \
+      -b "bench_function_base.Linspace.time_linspace_scalar" \
+      -b "bench_function_base.Mean.time_mean.1." \
+      -b "bench_function_base.Mean.time_mean.10." \
+      -b "bench_function_base.Mean.time_mean.100000." \
+      -b "bench_function_base.Mean.time_mean_axis.1." \
+      -b "bench_function_base.Mean.time_mean_axis.10." \
+      -b "bench_function_base.Mean.time_mean_axis.100000." \
+      -b "bench_function_base.Percentile.time_percentile" \
+      -b "bench_function_base.Percentile.time_percentile_small" \
+      -b "bench_function_base.Percentile.time_quartile" \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'float32', .'ordered',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'float32', .'random',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'float32', .'reversed',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'float32', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'float32', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'float32', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'float32', .'uniform',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'float64', .'ordered',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'float64', .'random',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'float64', .'reversed',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'float64', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'float64', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'float64', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'float64', .'uniform',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'int16', .'ordered',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'int16', .'random',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'int16', .'reversed',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'int16', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'int16', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'int16', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'int16', .'uniform',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'int32', .'ordered',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'int32', .'random',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'int32', .'reversed',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'int32', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'int32', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'int32', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'int32', .'uniform',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'int64', .'ordered',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'int64', .'random',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'int64', .'reversed',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'int64', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'int64', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'int64', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'int64', .'uniform',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'uint32', .'ordered',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'uint32', .'random',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'uint32', .'reversed',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'uint32', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'uint32', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'uint32', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'uint32', .'uniform',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'float32', .'ordered',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'float32', .'random',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'float32', .'reversed',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'float32', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'float32', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'float32', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'float32', .'uniform',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'float64', .'ordered',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'float64', .'random',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'float64', .'reversed',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'float64', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'float64', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'float64', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'float64', .'uniform',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'int16', .'ordered',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'int16', .'random',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'int16', .'reversed',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'int16', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'int16', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'int16', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'int16', .'uniform',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'int32', .'ordered',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'int32', .'random',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'int32', .'reversed',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'int32', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'int32', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'int32', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'int32', .'uniform',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'int64', .'ordered',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'int64', .'random',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'int64', .'reversed',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'int64', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'int64', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'int64', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'int64', .'uniform',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'uint32', .'ordered',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'uint32', .'random',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'uint32', .'reversed',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'uint32', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'uint32', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'uint32', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'uint32', .'uniform',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'float32', .'ordered',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'float32', .'random',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'float32', .'reversed',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'float32', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'float32', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'float32', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'float32', .'uniform',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'float64', .'ordered',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'float64', .'random',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'float64', .'reversed',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'float64', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'float64', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'float64', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'float64', .'uniform',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'int16', .'ordered',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'int16', .'random',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'int16', .'reversed',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'int16', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'int16', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'int16', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'int16', .'uniform',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'int32', .'ordered',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'int32', .'random',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'int32', .'reversed',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'int32', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'int32', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'int32', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'int32', .'uniform',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'int64', .'ordered',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'int64', .'random',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'int64', .'reversed',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'int64', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'int64', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'int64', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'int64', .'uniform',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'uint32', .'ordered',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'uint32', .'random',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'uint32', .'reversed',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'uint32', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'uint32', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'uint32', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'uint32', .'uniform',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'float32', .'ordered',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'float32', .'random',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'float32', .'reversed',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'float32', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'float32', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'float32', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'float32', .'uniform',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'float64', .'ordered',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'float64', .'random',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'float64', .'reversed',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'float64', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'float64', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'float64', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'float64', .'uniform',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'int16', .'ordered',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'int16', .'random',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'int16', .'reversed',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'int16', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'int16', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'int16', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'int16', .'uniform',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'int32', .'ordered',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'int32', .'random',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'int32', .'reversed',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'int32', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'int32', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'int32', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'int32', .'uniform',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'int64', .'ordered',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'int64', .'random',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'int64', .'reversed',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'int64', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'int64', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'int64', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'int64', .'uniform',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'uint32', .'ordered',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'uint32', .'random',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'uint32', .'reversed',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'uint32', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'uint32', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'uint32', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'uint32', .'uniform',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'float32', .'ordered',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'float32', .'random',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'float32', .'reversed',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'float32', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'float32', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'float32', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'float32', .'uniform',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'float64', .'ordered',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'float64', .'random',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'float64', .'reversed',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'float64', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'float64', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'float64', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'float64', .'uniform',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'int16', .'ordered',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'int16', .'random',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'int16', .'reversed',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'int16', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'int16', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'int16', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'int16', .'uniform',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'int32', .'ordered',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'int32', .'random',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'int32', .'reversed',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'int32', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'int32', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'int32', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'int32', .'uniform',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'int64', .'ordered',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'int64', .'random',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'int64', .'reversed',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'int64', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'int64', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'int64', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'int64', .'uniform',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'uint32', .'ordered',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'uint32', .'random',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'uint32', .'reversed',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'uint32', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'uint32', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'uint32', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'uint32', .'uniform',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'float32', .'ordered',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'float32', .'random',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'float32', .'reversed',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'float32', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'float32', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'float32', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'float32', .'uniform',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'float64', .'ordered',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'float64', .'random',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'float64', .'reversed',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'float64', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'float64', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'float64', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'float64', .'uniform',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'int16', .'ordered',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'int16', .'random',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'int16', .'reversed',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'int16', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'int16', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'int16', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'int16', .'uniform',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'int32', .'ordered',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'int32', .'random',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'int32', .'reversed',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'int32', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'int32', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'int32', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'int32', .'uniform',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'int64', .'ordered',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'int64', .'random',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'int64', .'reversed',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'int64', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'int64', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'int64', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'int64', .'uniform',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'uint32', .'ordered',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'uint32', .'random',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'uint32', .'reversed',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'uint32', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'uint32', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'uint32', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'uint32', .'uniform',.." \
+      -b "bench_function_base.Sort.time_sort_worst" \
+      -b "bench_lib.Nan.time_nanpercentile.200, 0." \
+      -b "bench_lib.Nan.time_nanpercentile.200, 0.1." \
+      -b "bench_lib.Nan.time_nanpercentile.200, 2.0." \
+      -b "bench_lib.Nan.time_nanpercentile.200, 50.0." \
+      -b "bench_lib.Nan.time_nanpercentile.200, 90.0." \
+      -b "bench_lib.Nan.time_nanpercentile.200000, 0." \
+      -b "bench_lib.Nan.time_nanpercentile.200000, 0.1." \
+      -b "bench_lib.Nan.time_nanpercentile.200000, 2.0." \
+      -b "bench_lib.Nan.time_nanpercentile.200000, 50.0." \
+      -b "bench_lib.Nan.time_nanpercentile.200000, 90.0." \
+      -b "bench_random.RNG.time_32bit.'MT19937'." \
+      -b "bench_random.RNG.time_32bit.'PCG64'." \
+      -b "bench_random.RNG.time_32bit.'Philox'." \
+      -b "bench_random.RNG.time_32bit.'SFC64'." \
+      -b "bench_random.RNG.time_32bit.'numpy'." \
+      -b "bench_random.RNG.time_64bit.'MT19937'." \
+      -b "bench_random.RNG.time_64bit.'PCG64'." \
+      -b "bench_random.RNG.time_64bit.'Philox'." \
+      -b "bench_random.RNG.time_64bit.'SFC64'." \
+      -b "bench_random.RNG.time_64bit.'numpy'." \
+      -b "bench_random.RNG.time_normal_zig.'MT19937'." \
+      -b "bench_random.RNG.time_normal_zig.'PCG64'." \
+      -b "bench_random.RNG.time_normal_zig.'Philox'." \
+      -b "bench_random.RNG.time_normal_zig.'SFC64'." \
+      -b "bench_random.RNG.time_normal_zig.'numpy'." \
+      -b "bench_random.RNG.time_raw.'MT19937'." \
+      -b "bench_random.RNG.time_raw.'PCG64'." \
+      -b "bench_random.RNG.time_raw.'Philox'." \
+      -b "bench_random.RNG.time_raw.'SFC64'." \
+      -b "bench_random.RNG.time_raw.'numpy'." \
+      -b "bench_xiecheng.ElementwiseBroadcast.time_normalise_and_sigmoid.4000." \
+      -b "bench_xiecheng.RandomAndStats.time_rng.4000." \
+      -b "bench_xiecheng.RandomAndStats.time_statistics.4000." \
+      -b "bench_xiecheng.SortSearch.time_argsort.4000." \
+      -b "bench_xiecheng.SortSearch.time_searchsorted.4000." \
+      -b "bench_xiecheng.SortSearch.time_sort.4000." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.int16'>, 100." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.int16'>, 10000." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.int16'>, 1000000." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.int32'>, 100." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.int32'>, 10000." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.int32'>, 1000000." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.int64'>, 100." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.int64'>, 10000." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.int64'>, 1000000." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.int8'>, 100." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.int8'>, 10000." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.int8'>, 1000000." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.longlong'>, 100." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.longlong'>, 10000." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.longlong'>, 1000000." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.uint16'>, 100." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.uint16'>, 10000." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.uint16'>, 1000000." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.uint32'>, 100." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.uint32'>, 10000." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.uint32'>, 1000000." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.uint64'>, 100." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.uint64'>, 10000." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.uint64'>, 1000000." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.uint8'>, 100." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.uint8'>, 10000." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.uint8'>, 1000000." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.ulonglong'>, 100." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.ulonglong'>, 10000." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.ulonglong'>, 1000000." \
+      -b "bench_ufunc.BinaryBench.time_pow.<class 'numpy.float64'>." \
+      -b "bench_ufunc.BinaryBench.time_pow_2.<class 'numpy.float64'>." \
+      -b "bench_ufunc.BinaryBench.time_pow_2_op.<class 'numpy.float64'>." \
+      -b "bench_ufunc.BinaryBench.time_pow_half.<class 'numpy.float64'>." \
+      -b "bench_ufunc.BinaryBench.time_pow_half_op.<class 'numpy.float64'>." \
+      -b "bench_ufunc.BinaryBenchInteger.time_pow.<class 'numpy.int64'>." \
+      -b "bench_ufunc.BinaryBenchInteger.time_pow_five.<class 'numpy.int64'>." \
+      -b "bench_ufunc.BinaryBenchInteger.time_pow_two.<class 'numpy.int64'>." \
+      -b "bench_ufunc.MethodsV1.time_ndarray_meth.'__pow__', 'float64'." \
+      -b "bench_ufunc.MethodsV1.time_ndarray_meth.'__pow__', 'int64'." \
+      -b "bench_scalar.ScalarMath.time_power_of_two.'float64'." \
+      -b "bench_scalar.ScalarMath.time_power_of_two.'int64'." \
+      -b "bench_ufunc.UFunc.time_ufunc_types.'sqrt'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'sqrt'>, 1, 1, 'd'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'sqrt'>, 1, 1, 'f'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'sqrt'>, 1, 1, 'd'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'sqrt'>, 1, 1, 'f'." \
+      -b "bench_ufunc.UFunc.time_ufunc_types.'log'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'log'>, 1, 1, 'd'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'log'>, 1, 1, 'f'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'log'>, 1, 1, 'd'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'log'>, 1, 1, 'f'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'cos'>, 1, 1, 'd'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'cos'>, 1, 1, 'f'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'cos'>, 1, 1, 'd'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'cos'>, 1, 1, 'f'." \
+      -b "bench_ufunc.UFunc.time_ufunc_types.'tan'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'tan'>, 1, 1, 'd'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'tan'>, 1, 1, 'f'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'tan'>, 1, 1, 'd'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'tan'>, 1, 1, 'f'." \
+      -b "bench_random.Randint.time_randint_fast" \
+      -b "bench_random.Randint.time_randint_slow" \
+      -b "bench_random.Randint_dtype.time_randint_fast.'uint64'." \
+      -b "bench_random.Randint_dtype.time_randint_slow.'uint64'." \
+      -b "bench_core.StatsMethods.time_max.'float64', 100." \
+      -b "bench_core.StatsMethods.time_max.'float64', 10000." \
+      -b "bench_core.StatsMethods.time_max.'int64', 100." \
+      -b "bench_core.StatsMethods.time_max.'int64', 10000." \
+      -b "bench_reduce.FMinMax.time_max.<class 'numpy.float64'>." \
+      -b "bench_reduce.StatsReductions.time_max.'float64'." \
+      -b "bench_reduce.StatsReductions.time_max.'int64'." \
+      -b "bench_lib.Nan.time_nanargmax.200, 0." \
+      -b "bench_lib.Nan.time_nanargmax.200, 0.1." \
+      -b "bench_lib.Nan.time_nanargmax.200, 2.0." \
+      -b "bench_lib.Nan.time_nanargmax.200, 50.0." \
+      -b "bench_lib.Nan.time_nanargmax.200, 90.0." \
+      -b "bench_lib.Nan.time_nanargmax.200000, 0." \
+      -b "bench_lib.Nan.time_nanargmax.200000, 0.1." \
+      -b "bench_lib.Nan.time_nanargmax.200000, 2.0." \
+      -b "bench_lib.Nan.time_nanargmax.200000, 50.0." \
+      -b "bench_lib.Nan.time_nanargmax.200000, 90.0." \
+      -b "bench_lib.Nan.time_nanargmin.200, 0." \
+      -b "bench_lib.Nan.time_nanargmin.200, 0.1." \
+      -b "bench_lib.Nan.time_nanargmin.200, 2.0." \
+      -b "bench_lib.Nan.time_nanargmin.200, 50.0." \
+      -b "bench_lib.Nan.time_nanargmin.200, 90.0." \
+      -b "bench_lib.Nan.time_nanargmin.200000, 0." \
+      -b "bench_lib.Nan.time_nanargmin.200000, 0.1." \
+      -b "bench_lib.Nan.time_nanargmin.200000, 2.0." \
+      -b "bench_lib.Nan.time_nanargmin.200000, 50.0." \
+      -b "bench_lib.Nan.time_nanargmin.200000, 90.0." \
+      -b "bench_function_base.Partition.time_argpartition.'float64', .'ordered',., 10." \
+      -b "bench_function_base.Partition.time_argpartition.'float64', .'ordered',., 100." \
+      -b "bench_function_base.Partition.time_argpartition.'float64', .'ordered',., 1000." \
+      -b "bench_function_base.Partition.time_argpartition.'float64', .'random',., 10." \
+      -b "bench_function_base.Partition.time_argpartition.'float64', .'random',., 100." \
+      -b "bench_function_base.Partition.time_argpartition.'float64', .'random',., 1000." \
+      -b "bench_function_base.Partition.time_argpartition.'float64', .'reversed',., 10." \
+      -b "bench_function_base.Partition.time_argpartition.'float64', .'reversed',., 100." \
+      -b "bench_function_base.Partition.time_argpartition.'float64', .'reversed',., 1000." \
+      -b "bench_function_base.Partition.time_argpartition.'float64', .'sorted_block', 10., 10." \
+      -b "bench_function_base.Partition.time_argpartition.'float64', .'sorted_block', 10., 100." \
+      -b "bench_function_base.Partition.time_argpartition.'float64', .'sorted_block', 10., 1000." \
+      -b "bench_function_base.Partition.time_argpartition.'float64', .'sorted_block', 100., 10." \
+      -b "bench_function_base.Partition.time_argpartition.'float64', .'sorted_block', 100., 100." \
+      -b "bench_function_base.Partition.time_argpartition.'float64', .'sorted_block', 100., 1000." \
+      -b "bench_function_base.Partition.time_argpartition.'float64', .'sorted_block', 1000., 10." \
+      -b "bench_function_base.Partition.time_argpartition.'float64', .'sorted_block', 1000., 100." \
+      -b "bench_function_base.Partition.time_argpartition.'float64', .'sorted_block', 1000., 1000." \
+      -b "bench_function_base.Partition.time_argpartition.'float64', .'uniform',., 10." \
+      -b "bench_function_base.Partition.time_argpartition.'float64', .'uniform',., 100." \
+      -b "bench_function_base.Partition.time_argpartition.'float64', .'uniform',., 1000." \
+      -b "bench_function_base.Partition.time_argpartition.'int64', .'ordered',., 10." \
+      -b "bench_function_base.Partition.time_argpartition.'int64', .'ordered',., 100." \
+      -b "bench_function_base.Partition.time_argpartition.'int64', .'ordered',., 1000." \
+      -b "bench_function_base.Partition.time_argpartition.'int64', .'random',., 10." \
+      -b "bench_function_base.Partition.time_argpartition.'int64', .'random',., 100." \
+      -b "bench_function_base.Partition.time_argpartition.'int64', .'random',., 1000." \
+      -b "bench_function_base.Partition.time_argpartition.'int64', .'reversed',., 10." \
+      -b "bench_function_base.Partition.time_argpartition.'int64', .'reversed',., 100." \
+      -b "bench_function_base.Partition.time_argpartition.'int64', .'reversed',., 1000." \
+      -b "bench_function_base.Partition.time_argpartition.'int64', .'sorted_block', 10., 10." \
+      -b "bench_function_base.Partition.time_argpartition.'int64', .'sorted_block', 10., 100." \
+      -b "bench_function_base.Partition.time_argpartition.'int64', .'sorted_block', 10., 1000." \
+      -b "bench_function_base.Partition.time_argpartition.'int64', .'sorted_block', 100., 10." \
+      -b "bench_function_base.Partition.time_argpartition.'int64', .'sorted_block', 100., 100." \
+      -b "bench_function_base.Partition.time_argpartition.'int64', .'sorted_block', 100., 1000." \
+      -b "bench_function_base.Partition.time_argpartition.'int64', .'sorted_block', 1000., 10." \
+      -b "bench_function_base.Partition.time_argpartition.'int64', .'sorted_block', 1000., 100." \
+      -b "bench_function_base.Partition.time_argpartition.'int64', .'sorted_block', 1000., 1000." \
+      -b "bench_function_base.Partition.time_argpartition.'int64', .'uniform',., 10." \
+      -b "bench_function_base.Partition.time_argpartition.'int64', .'uniform',., 100." \
+      -b "bench_function_base.Partition.time_argpartition.'int64', .'uniform',., 1000." \
+      -b "bench_function_base.Partition.time_partition.'float64', .'ordered',., 10." \
+      -b "bench_function_base.Partition.time_partition.'float64', .'ordered',., 100." \
+      -b "bench_function_base.Partition.time_partition.'float64', .'ordered',., 1000." \
+      -b "bench_function_base.Partition.time_partition.'float64', .'random',., 10." \
+      -b "bench_function_base.Partition.time_partition.'float64', .'random',., 100." \
+      -b "bench_function_base.Partition.time_partition.'float64', .'random',., 1000." \
+      -b "bench_function_base.Partition.time_partition.'float64', .'reversed',., 10." \
+      -b "bench_function_base.Partition.time_partition.'float64', .'reversed',., 100." \
+      -b "bench_function_base.Partition.time_partition.'float64', .'reversed',., 1000." \
+      -b "bench_function_base.Partition.time_partition.'float64', .'sorted_block', 10., 10." \
+      -b "bench_function_base.Partition.time_partition.'float64', .'sorted_block', 10., 100." \
+      -b "bench_function_base.Partition.time_partition.'float64', .'sorted_block', 10., 1000." \
+      -b "bench_function_base.Partition.time_partition.'float64', .'sorted_block', 100., 10." \
+      -b "bench_function_base.Partition.time_partition.'float64', .'sorted_block', 100., 100." \
+      -b "bench_function_base.Partition.time_partition.'float64', .'sorted_block', 100., 1000." \
+      -b "bench_function_base.Partition.time_partition.'float64', .'sorted_block', 1000., 10." \
+      -b "bench_function_base.Partition.time_partition.'float64', .'sorted_block', 1000., 100." \
+      -b "bench_function_base.Partition.time_partition.'float64', .'sorted_block', 1000., 1000." \
+      -b "bench_function_base.Partition.time_partition.'float64', .'uniform',., 10." \
+      -b "bench_function_base.Partition.time_partition.'float64', .'uniform',., 100." \
+      -b "bench_function_base.Partition.time_partition.'float64', .'uniform',., 1000." \
+      -b "bench_function_base.Partition.time_partition.'int64', .'ordered',., 10." \
+      -b "bench_function_base.Partition.time_partition.'int64', .'ordered',., 100." \
+      -b "bench_function_base.Partition.time_partition.'int64', .'ordered',., 1000." \
+      -b "bench_function_base.Partition.time_partition.'int64', .'random',., 10." \
+      -b "bench_function_base.Partition.time_partition.'int64', .'random',., 100." \
+      -b "bench_function_base.Partition.time_partition.'int64', .'random',., 1000." \
+      -b "bench_function_base.Partition.time_partition.'int64', .'reversed',., 10." \
+      -b "bench_function_base.Partition.time_partition.'int64', .'reversed',., 100." \
+      -b "bench_function_base.Partition.time_partition.'int64', .'reversed',., 1000." \
+      -b "bench_function_base.Partition.time_partition.'int64', .'sorted_block', 10., 10." \
+      -b "bench_function_base.Partition.time_partition.'int64', .'sorted_block', 10., 100." \
+      -b "bench_function_base.Partition.time_partition.'int64', .'sorted_block', 10., 1000." \
+      -b "bench_function_base.Partition.time_partition.'int64', .'sorted_block', 100., 10." \
+      -b "bench_function_base.Partition.time_partition.'int64', .'sorted_block', 100., 100." \
+      -b "bench_function_base.Partition.time_partition.'int64', .'sorted_block', 100., 1000." \
+      -b "bench_function_base.Partition.time_partition.'int64', .'sorted_block', 1000., 10." \
+      -b "bench_function_base.Partition.time_partition.'int64', .'sorted_block', 1000., 100." \
+      -b "bench_function_base.Partition.time_partition.'int64', .'sorted_block', 1000., 1000." \
+      -b "bench_function_base.Partition.time_partition.'int64', .'uniform',., 10." \
+      -b "bench_function_base.Partition.time_partition.'int64', .'uniform',., 100." \
+      -b "bench_function_base.Partition.time_partition.'int64', .'uniform',., 1000." \
+      -b "bench_core.StatsMethods.time_sum.'float64', 100." \
+      -b "bench_core.StatsMethods.time_sum.'float64', 10000." \
+      -b "bench_core.StatsMethods.time_sum.'int64', 100." \
+      -b "bench_core.StatsMethods.time_sum.'int64', 10000." \
+      -b "bench_core.StatsMethods.time_var.'float64', 100." \
+      -b "bench_core.StatsMethods.time_var.'float64', 10000." \
+      -b "bench_core.StatsMethods.time_var.'int64', 100." \
+      -b "bench_core.StatsMethods.time_var.'int64', 10000." \
+      -b "bench_ufunc.UFunc.time_ufunc_types.'maximum'." \
+      -b "bench_ufunc_strides.BinaryFP.time_binary.<ufunc 'maximum'>, 1, 1, 1, 'd'." \
+      -b "bench_ufunc_strides.BinaryFP.time_binary.<ufunc 'maximum'>, 1, 1, 1, 'f'." \
+      -b "bench_ufunc_strides.BinaryFP.time_binary_scalar_in0.<ufunc 'maximum'>, 1, 1, 1, 'd'." \
+      -b "bench_ufunc_strides.BinaryFP.time_binary_scalar_in0.<ufunc 'maximum'>, 1, 1, 1, 'f'." \
+      -b "bench_ufunc_strides.BinaryFPSpecial.time_binary.<ufunc 'maximum'>, 1, 1, 1, 'd'." \
+      -b "bench_ufunc_strides.BinaryFPSpecial.time_binary.<ufunc 'maximum'>, 1, 1, 1, 'f'." \
+      -b "bench_ufunc_strides.BinaryFPSpecial.time_binary_scalar_in0.<ufunc 'maximum'>, 1, 1, 1, 'd'." \
+      -b "bench_ufunc_strides.BinaryFPSpecial.time_binary_scalar_in0.<ufunc 'maximum'>, 1, 1, 1, 'f'." \
+      -b "bench_ufunc_strides.BinaryInt.time_binary.<ufunc 'maximum'>, 1, 1, 1, 'B'." \
+      -b "bench_ufunc_strides.BinaryInt.time_binary.<ufunc 'maximum'>, 1, 1, 1, 'H'." \
+      -b "bench_ufunc_strides.BinaryInt.time_binary.<ufunc 'maximum'>, 1, 1, 1, 'I'." \
+      -b "bench_ufunc_strides.BinaryInt.time_binary.<ufunc 'maximum'>, 1, 1, 1, 'L'." \
+      -b "bench_ufunc_strides.BinaryInt.time_binary.<ufunc 'maximum'>, 1, 1, 1, 'Q'." \
+      -b "bench_ufunc_strides.BinaryInt.time_binary.<ufunc 'maximum'>, 1, 1, 1, 'b'." \
+      -b "bench_ufunc_strides.BinaryInt.time_binary.<ufunc 'maximum'>, 1, 1, 1, 'h'." \
+      -b "bench_ufunc_strides.BinaryInt.time_binary.<ufunc 'maximum'>, 1, 1, 1, 'i'." \
+      -b "bench_ufunc_strides.BinaryInt.time_binary.<ufunc 'maximum'>, 1, 1, 1, 'l'." \
+      -b "bench_ufunc_strides.BinaryInt.time_binary.<ufunc 'maximum'>, 1, 1, 1, 'q'." \
+      -b "bench_ufunc_strides.BinaryInt.time_binary_scalar_in0.<ufunc 'maximum'>, 1, 1, 1, 'B'." \
+      -b "bench_ufunc_strides.BinaryInt.time_binary_scalar_in0.<ufunc 'maximum'>, 1, 1, 1, 'H'." \
+      -b "bench_ufunc_strides.BinaryInt.time_binary_scalar_in0.<ufunc 'maximum'>, 1, 1, 1, 'I'." \
+      -b "bench_ufunc_strides.BinaryInt.time_binary_scalar_in0.<ufunc 'maximum'>, 1, 1, 1, 'L'." \
+      -b "bench_ufunc_strides.BinaryInt.time_binary_scalar_in0.<ufunc 'maximum'>, 1, 1, 1, 'Q'." \
+      -b "bench_ufunc_strides.BinaryInt.time_binary_scalar_in0.<ufunc 'maximum'>, 1, 1, 1, 'b'." \
+      -b "bench_ufunc_strides.BinaryInt.time_binary_scalar_in0.<ufunc 'maximum'>, 1, 1, 1, 'h'." \
+      -b "bench_ufunc_strides.BinaryInt.time_binary_scalar_in0.<ufunc 'maximum'>, 1, 1, 1, 'i'." \
+      -b "bench_ufunc_strides.BinaryInt.time_binary_scalar_in0.<ufunc 'maximum'>, 1, 1, 1, 'l'." \
+      -b "bench_ufunc_strides.BinaryInt.time_binary_scalar_in0.<ufunc 'maximum'>, 1, 1, 1, 'q'."
+    INNER_EOF
+
+    docker cp /home/luozisheng/tmp/docker_script.sh mycontainer:/home/luozisheng/tmp/docker_script.sh
+    docker exec mycontainer bash /home/luozisheng/tmp/docker_script.sh
+    rm -rf results
+    mkdir -p results
+    docker cp mycontainer:${BASE_DIR}/numpy/benchmarks/results/. ${BASE_DIR}/numpy/benchmarks/results/
+    rm -f /home/luozisheng/tmp/docker_script.sh
+
+  server2: |
+    export CONDA_NAME=l00668690
+    export BASE_DIR=/home/luozisheng
+    cd ${BASE_DIR}/numpy/benchmarks
+    rm -rf results
+
+    # 确保临时目录存在（宿主机和容器内）
+    mkdir -p /home/luozisheng/tmp
+    docker exec mycontainer mkdir -p /home/luozisheng/tmp
+
+    # 创建临时脚本文件
+    cat > /home/luozisheng/tmp/docker_script.sh <<'INNER_EOF'
+    source /opt/rh/gcc-toolset-12/enable
+    export BASE_DIR=/home/luozisheng
+    export CONDA_NAME=l00668690
+    export OPENBLAS_NUM_THREADS=4
+    conda activate ${CONDA_NAME}
+    cd ${BASE_DIR}/numpy/benchmarks
+    rm -rf results
+    asv machine --yes
+    git config --global http.sslVerify false
+    git config --global --add safe.directory ${BASE_DIR}/numpy
+    git config --global --add safe.directory ${BASE_DIR}/numpy/.git
+    asv run \
+      -b "bench_core.StatsMethods.time_mean.'bool_', 100." \
+      -b "bench_core.StatsMethods.time_mean.'bool_', 10000." \
+      -b "bench_core.StatsMethods.time_mean.'float32', 100." \
+      -b "bench_core.StatsMethods.time_mean.'float32', 10000." \
+      -b "bench_core.StatsMethods.time_mean.'float64', 100." \
+      -b "bench_core.StatsMethods.time_mean.'float64', 10000." \
+      -b "bench_core.StatsMethods.time_mean.'int64', 100." \
+      -b "bench_core.StatsMethods.time_mean.'int64', 10000." \
+      -b "bench_core.StatsMethods.time_mean.'uint64', 100." \
+      -b "bench_core.StatsMethods.time_mean.'uint64', 10000." \
+      -b "bench_core.StatsMethods.time_std.'bool_', 100." \
+      -b "bench_core.StatsMethods.time_std.'bool_', 10000." \
+      -b "bench_core.StatsMethods.time_std.'float32', 100." \
+      -b "bench_core.StatsMethods.time_std.'float32', 10000." \
+      -b "bench_core.StatsMethods.time_std.'float64', 100." \
+      -b "bench_core.StatsMethods.time_std.'float64', 10000." \
+      -b "bench_core.StatsMethods.time_std.'int64', 100." \
+      -b "bench_core.StatsMethods.time_std.'int64', 10000." \
+      -b "bench_core.StatsMethods.time_std.'uint64', 100." \
+      -b "bench_core.StatsMethods.time_std.'uint64', 10000." \
+      -b "bench_indexing.Indexing.time_op.'O,i', 'indexes_', ':,I', ''." \
+      -b "bench_indexing.Indexing.time_op.'O,i', 'indexes_', ':,I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'O,i', 'indexes_', 'I', ''." \
+      -b "bench_indexing.Indexing.time_op.'O,i', 'indexes_', 'I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'O,i', 'indexes_', 'np.ix_.I, I.', ''." \
+      -b "bench_indexing.Indexing.time_op.'O,i', 'indexes_', 'np.ix_.I, I.', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'O,i', 'indexes_rand_', ':,I', ''." \
+      -b "bench_indexing.Indexing.time_op.'O,i', 'indexes_rand_', ':,I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'O,i', 'indexes_rand_', 'I', ''." \
+      -b "bench_indexing.Indexing.time_op.'O,i', 'indexes_rand_', 'I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'O,i', 'indexes_rand_', 'np.ix_.I, I.', ''." \
+      -b "bench_indexing.Indexing.time_op.'O,i', 'indexes_rand_', 'np.ix_.I, I.', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'float32', 'indexes_', ':,I', ''." \
+      -b "bench_indexing.Indexing.time_op.'float32', 'indexes_', ':,I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'float32', 'indexes_', 'I', ''." \
+      -b "bench_indexing.Indexing.time_op.'float32', 'indexes_', 'I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'float32', 'indexes_', 'np.ix_.I, I.', ''." \
+      -b "bench_indexing.Indexing.time_op.'float32', 'indexes_', 'np.ix_.I, I.', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'float32', 'indexes_rand_', ':,I', ''." \
+      -b "bench_indexing.Indexing.time_op.'float32', 'indexes_rand_', ':,I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'float32', 'indexes_rand_', 'I', ''." \
+      -b "bench_indexing.Indexing.time_op.'float32', 'indexes_rand_', 'I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'float32', 'indexes_rand_', 'np.ix_.I, I.', ''." \
+      -b "bench_indexing.Indexing.time_op.'float32', 'indexes_rand_', 'np.ix_.I, I.', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'float64', 'indexes_', ':,I', ''." \
+      -b "bench_indexing.Indexing.time_op.'float64', 'indexes_', ':,I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'float64', 'indexes_', 'I', ''." \
+      -b "bench_indexing.Indexing.time_op.'float64', 'indexes_', 'I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'float64', 'indexes_', 'np.ix_.I, I.', ''." \
+      -b "bench_indexing.Indexing.time_op.'float64', 'indexes_', 'np.ix_.I, I.', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'float64', 'indexes_rand_', ':,I', ''." \
+      -b "bench_indexing.Indexing.time_op.'float64', 'indexes_rand_', ':,I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'float64', 'indexes_rand_', 'I', ''." \
+      -b "bench_indexing.Indexing.time_op.'float64', 'indexes_rand_', 'I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'float64', 'indexes_rand_', 'np.ix_.I, I.', ''." \
+      -b "bench_indexing.Indexing.time_op.'float64', 'indexes_rand_', 'np.ix_.I, I.', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'int16', 'indexes_', ':,I', ''." \
+      -b "bench_indexing.Indexing.time_op.'int16', 'indexes_', ':,I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'int16', 'indexes_', 'I', ''." \
+      -b "bench_indexing.Indexing.time_op.'int16', 'indexes_', 'I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'int16', 'indexes_', 'np.ix_.I, I.', ''." \
+      -b "bench_indexing.Indexing.time_op.'int16', 'indexes_', 'np.ix_.I, I.', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'int16', 'indexes_rand_', ':,I', ''." \
+      -b "bench_indexing.Indexing.time_op.'int16', 'indexes_rand_', ':,I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'int16', 'indexes_rand_', 'I', ''." \
+      -b "bench_indexing.Indexing.time_op.'int16', 'indexes_rand_', 'I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'int16', 'indexes_rand_', 'np.ix_.I, I.', ''." \
+      -b "bench_indexing.Indexing.time_op.'int16', 'indexes_rand_', 'np.ix_.I, I.', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'int32', 'indexes_', ':,I', ''." \
+      -b "bench_indexing.Indexing.time_op.'int32', 'indexes_', ':,I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'int32', 'indexes_', 'I', ''." \
+      -b "bench_indexing.Indexing.time_op.'int32', 'indexes_', 'I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'int32', 'indexes_', 'np.ix_.I, I.', ''." \
+      -b "bench_indexing.Indexing.time_op.'int32', 'indexes_', 'np.ix_.I, I.', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'int32', 'indexes_rand_', ':,I', ''." \
+      -b "bench_indexing.Indexing.time_op.'int32', 'indexes_rand_', ':,I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'int32', 'indexes_rand_', 'I', ''." \
+      -b "bench_indexing.Indexing.time_op.'int32', 'indexes_rand_', 'I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'int32', 'indexes_rand_', 'np.ix_.I, I.', ''." \
+      -b "bench_indexing.Indexing.time_op.'int32', 'indexes_rand_', 'np.ix_.I, I.', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'int64', 'indexes_', ':,I', ''." \
+      -b "bench_indexing.Indexing.time_op.'int64', 'indexes_', ':,I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'int64', 'indexes_', 'I', ''." \
+      -b "bench_indexing.Indexing.time_op.'int64', 'indexes_', 'I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'int64', 'indexes_', 'np.ix_.I, I.', ''." \
+      -b "bench_indexing.Indexing.time_op.'int64', 'indexes_', 'np.ix_.I, I.', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'int64', 'indexes_rand_', ':,I', ''." \
+      -b "bench_indexing.Indexing.time_op.'int64', 'indexes_rand_', ':,I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'int64', 'indexes_rand_', 'I', ''." \
+      -b "bench_indexing.Indexing.time_op.'int64', 'indexes_rand_', 'I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'int64', 'indexes_rand_', 'np.ix_.I, I.', ''." \
+      -b "bench_indexing.Indexing.time_op.'int64', 'indexes_rand_', 'np.ix_.I, I.', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'object', 'indexes_', ':,I', ''." \
+      -b "bench_indexing.Indexing.time_op.'object', 'indexes_', ':,I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'object', 'indexes_', 'I', ''." \
+      -b "bench_indexing.Indexing.time_op.'object', 'indexes_', 'I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'object', 'indexes_', 'np.ix_.I, I.', ''." \
+      -b "bench_indexing.Indexing.time_op.'object', 'indexes_', 'np.ix_.I, I.', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'object', 'indexes_rand_', ':,I', ''." \
+      -b "bench_indexing.Indexing.time_op.'object', 'indexes_rand_', ':,I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'object', 'indexes_rand_', 'I', ''." \
+      -b "bench_indexing.Indexing.time_op.'object', 'indexes_rand_', 'I', '=1'." \
+      -b "bench_indexing.Indexing.time_op.'object', 'indexes_rand_', 'np.ix_.I, I.', ''." \
+      -b "bench_indexing.Indexing.time_op.'object', 'indexes_rand_', 'np.ix_.I, I.', '=1'." \
+      -b "bench_indexing.IndexingSeparate.time_mmap_fancy_indexing" \
+      -b "bench_indexing.IndexingSeparate.time_mmap_slicing" \
+      -b "bench_indexing.IndexingStructured0D.time_array_all" \
+      -b "bench_indexing.IndexingStructured0D.time_array_slice" \
+      -b "bench_indexing.IndexingStructured0D.time_scalar_all" \
+      -b "bench_indexing.IndexingStructured0D.time_scalar_slice" \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000, 1., 'O'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000, 1., 'float32'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000, 1., 'float64'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000, 1., 'i,O'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000, 1., 'int16'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000, 1., 'int32'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000, 1., 'int64'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000, 2., 'O'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000, 2., 'float32'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000, 2., 'float64'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000, 2., 'i,O'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000, 2., 'int16'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000, 2., 'int32'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000, 2., 'int64'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000, 3., 'O'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000, 3., 'float32'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000, 3., 'float64'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000, 3., 'i,O'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000, 3., 'int16'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000, 3., 'int32'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000, 3., 'int64'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000,., 'O'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000,., 'float32'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000,., 'float64'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000,., 'i,O'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000,., 'int16'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000,., 'int32'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..1000,., 'int64'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..2, 1000, 1., 'O'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..2, 1000, 1., 'float32'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..2, 1000, 1., 'float64'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..2, 1000, 1., 'i,O'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..2, 1000, 1., 'int16'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..2, 1000, 1., 'int32'." \
+      -b "bench_indexing.IndexingWith1DArr.time_getitem_ordered..2, 1000, 1., 'int64'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000, 1., 'O'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000, 1., 'float32'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000, 1., 'float64'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000, 1., 'i,O'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000, 1., 'int16'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000, 1., 'int32'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000, 1., 'int64'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000, 2., 'O'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000, 2., 'float32'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000, 2., 'float64'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000, 2., 'i,O'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000, 2., 'int16'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000, 2., 'int32'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000, 2., 'int64'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000, 3., 'O'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000, 3., 'float32'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000, 3., 'float64'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000, 3., 'i,O'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000, 3., 'int16'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000, 3., 'int32'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000, 3., 'int64'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000,., 'O'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000,., 'float32'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000,., 'float64'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000,., 'i,O'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000,., 'int16'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000,., 'int32'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..1000,., 'int64'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..2, 1000, 1., 'O'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..2, 1000, 1., 'float32'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..2, 1000, 1., 'float64'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..2, 1000, 1., 'i,O'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..2, 1000, 1., 'int16'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..2, 1000, 1., 'int32'." \
+      -b "bench_indexing.IndexingWith1DArr.time_setitem_ordered..2, 1000, 1., 'int64'." \
+      -b "bench_reduce.ArgMax.time_argmax.<class 'bool'>." \
+      -b "bench_reduce.ArgMax.time_argmax.<class 'numpy.float32'>." \
+      -b "bench_reduce.ArgMax.time_argmax.<class 'numpy.float64'>." \
+      -b "bench_reduce.ArgMax.time_argmax.<class 'numpy.int16'>." \
+      -b "bench_reduce.ArgMax.time_argmax.<class 'numpy.int32'>." \
+      -b "bench_reduce.ArgMax.time_argmax.<class 'numpy.int64'>." \
+      -b "bench_reduce.ArgMax.time_argmax.<class 'numpy.int8'>." \
+      -b "bench_reduce.ArgMax.time_argmax.<class 'numpy.uint16'>." \
+      -b "bench_reduce.ArgMax.time_argmax.<class 'numpy.uint32'>." \
+      -b "bench_reduce.ArgMax.time_argmax.<class 'numpy.uint64'>." \
+      -b "bench_reduce.ArgMax.time_argmax.<class 'numpy.uint8'>." \
+      -b "bench_reduce.StatsReductions.time_mean.'bool_'." \
+      -b "bench_reduce.StatsReductions.time_mean.'float32'." \
+      -b "bench_reduce.StatsReductions.time_mean.'float64'." \
+      -b "bench_reduce.StatsReductions.time_mean.'int64'." \
+      -b "bench_reduce.StatsReductions.time_mean.'uint64'." \
+      -b "bench_reduce.StatsReductions.time_std.'bool_'." \
+      -b "bench_reduce.StatsReductions.time_std.'float32'." \
+      -b "bench_reduce.StatsReductions.time_std.'float64'." \
+      -b "bench_reduce.StatsReductions.time_std.'int64'." \
+      -b "bench_reduce.StatsReductions.time_std.'uint64'." \
+      -b "bench_ufunc.NDArrayAsType.time_astype..'float32', 'float64'.." \
+      -b "bench_ufunc.NDArrayAsType.time_astype..'float32', 'int64'.." \
+      -b "bench_ufunc.NDArrayAsType.time_astype..'int16', 'float32'.." \
+      -b "bench_ufunc.NDArrayAsType.time_astype..'int16', 'float64'.." \
+      -b "bench_ufunc.NDArrayAsType.time_astype..'int16', 'int32'.." \
+      -b "bench_ufunc.NDArrayAsType.time_astype..'int16', 'int64'.." \
+      -b "bench_ufunc.NDArrayAsType.time_astype..'int32', 'float32'.." \
+      -b "bench_ufunc.NDArrayAsType.time_astype..'int32', 'float64'.." \
+      -b "bench_ufunc.NDArrayAsType.time_astype..'int32', 'int64'.." \
+      -b "bench_ufunc.NDArrayAsType.time_astype..'int64', 'float64'.." \
+      -b "bench_ufunc.UFunc.time_ufunc_types.'abs'." \
+      -b "bench_ufunc.UFunc.time_ufunc_types.'add'." \
+      -b "bench_ufunc.UFunc.time_ufunc_types.'divide'." \
+      -b "bench_ufunc.UFunc.time_ufunc_types.'exp'." \
+      -b "bench_ufunc.UFunc.time_ufunc_types.'multiply'." \
+      -b "bench_ufunc.UFunc.time_ufunc_types.'sin'." \
+      -b "bench_ufunc.UFunc.time_ufunc_types.'subtract'." \
+      -b "bench_ufunc.UFuncSmall.time_ufunc_numpy_scalar.'abs'." \
+      -b "bench_ufunc.UFuncSmall.time_ufunc_numpy_scalar.'cos'." \
+      -b "bench_ufunc.UFuncSmall.time_ufunc_numpy_scalar.'sqrt'." \
+      -b "bench_ufunc.UFuncSmall.time_ufunc_python_float.'abs'." \
+      -b "bench_ufunc.UFuncSmall.time_ufunc_python_float.'cos'." \
+      -b "bench_ufunc.UFuncSmall.time_ufunc_python_float.'sqrt'." \
+      -b "bench_ufunc.UFuncSmall.time_ufunc_small_array.'abs'." \
+      -b "bench_ufunc.UFuncSmall.time_ufunc_small_array.'cos'." \
+      -b "bench_ufunc.UFuncSmall.time_ufunc_small_array.'sqrt'." \
+      -b "bench_ufunc.UFuncSmall.time_ufunc_small_array_inplace.'abs'." \
+      -b "bench_ufunc.UFuncSmall.time_ufunc_small_array_inplace.'cos'." \
+      -b "bench_ufunc.UFuncSmall.time_ufunc_small_array_inplace.'sqrt'." \
+      -b "bench_ufunc.UFuncSmall.time_ufunc_small_int_array.'abs'." \
+      -b "bench_ufunc.UFuncSmall.time_ufunc_small_int_array.'cos'." \
+      -b "bench_ufunc.UFuncSmall.time_ufunc_small_int_array.'sqrt'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'exp'>, 1, 1, 'd'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'exp'>, 1, 1, 'e'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'exp'>, 1, 1, 'f'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'exp'>, 1, 2, 'd'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'exp'>, 1, 2, 'e'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'exp'>, 1, 2, 'f'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'exp'>, 4, 1, 'd'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'exp'>, 4, 1, 'e'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'exp'>, 4, 1, 'f'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'exp'>, 4, 2, 'd'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'exp'>, 4, 2, 'e'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'exp'>, 4, 2, 'f'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'sin'>, 1, 1, 'd'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'sin'>, 1, 1, 'e'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'sin'>, 1, 1, 'f'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'sin'>, 1, 2, 'd'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'sin'>, 1, 2, 'e'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'sin'>, 1, 2, 'f'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'sin'>, 4, 1, 'd'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'sin'>, 4, 1, 'e'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'sin'>, 4, 1, 'f'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'sin'>, 4, 2, 'd'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'sin'>, 4, 2, 'e'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'sin'>, 4, 2, 'f'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'exp'>, 1, 1, 'd'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'exp'>, 1, 1, 'e'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'exp'>, 1, 1, 'f'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'exp'>, 1, 2, 'd'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'exp'>, 1, 2, 'e'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'exp'>, 1, 2, 'f'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'exp'>, 4, 1, 'd'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'exp'>, 4, 1, 'e'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'exp'>, 4, 1, 'f'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'exp'>, 4, 2, 'd'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'exp'>, 4, 2, 'e'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'exp'>, 4, 2, 'f'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'sin'>, 1, 1, 'd'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'sin'>, 1, 1, 'e'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'sin'>, 1, 1, 'f'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'sin'>, 1, 2, 'd'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'sin'>, 1, 2, 'e'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'sin'>, 1, 2, 'f'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'sin'>, 4, 1, 'd'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'sin'>, 4, 1, 'e'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'sin'>, 4, 1, 'f'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'sin'>, 4, 2, 'd'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'sin'>, 4, 2, 'e'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'sin'>, 4, 2, 'f'." \
+      -b "bench_function_base.Histogram1D.time_fine_binning" \
+      -b "bench_function_base.Histogram1D.time_full_coverage" \
+      -b "bench_function_base.Histogram1D.time_small_coverage" \
+      -b "bench_function_base.Histogram2D.time_fine_binning" \
+      -b "bench_function_base.Histogram2D.time_full_coverage" \
+      -b "bench_function_base.Histogram2D.time_small_coverage" \
+      -b "bench_function_base.Linspace.time_linspace_array" \
+      -b "bench_function_base.Linspace.time_linspace_scalar" \
+      -b "bench_function_base.Mean.time_mean.1." \
+      -b "bench_function_base.Mean.time_mean.10." \
+      -b "bench_function_base.Mean.time_mean.100000." \
+      -b "bench_function_base.Mean.time_mean_axis.1." \
+      -b "bench_function_base.Mean.time_mean_axis.10." \
+      -b "bench_function_base.Mean.time_mean_axis.100000." \
+      -b "bench_function_base.Percentile.time_percentile" \
+      -b "bench_function_base.Percentile.time_percentile_small" \
+      -b "bench_function_base.Percentile.time_quartile" \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'float32', .'ordered',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'float32', .'random',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'float32', .'reversed',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'float32', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'float32', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'float32', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'float32', .'uniform',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'float64', .'ordered',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'float64', .'random',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'float64', .'reversed',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'float64', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'float64', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'float64', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'float64', .'uniform',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'int16', .'ordered',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'int16', .'random',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'int16', .'reversed',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'int16', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'int16', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'int16', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'int16', .'uniform',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'int32', .'ordered',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'int32', .'random',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'int32', .'reversed',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'int32', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'int32', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'int32', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'int32', .'uniform',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'int64', .'ordered',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'int64', .'random',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'int64', .'reversed',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'int64', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'int64', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'int64', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'int64', .'uniform',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'uint32', .'ordered',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'uint32', .'random',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'uint32', .'reversed',.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'uint32', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'uint32', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'uint32', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_argsort.'heap', 'uint32', .'uniform',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'float32', .'ordered',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'float32', .'random',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'float32', .'reversed',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'float32', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'float32', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'float32', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'float32', .'uniform',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'float64', .'ordered',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'float64', .'random',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'float64', .'reversed',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'float64', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'float64', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'float64', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'float64', .'uniform',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'int16', .'ordered',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'int16', .'random',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'int16', .'reversed',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'int16', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'int16', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'int16', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'int16', .'uniform',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'int32', .'ordered',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'int32', .'random',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'int32', .'reversed',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'int32', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'int32', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'int32', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'int32', .'uniform',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'int64', .'ordered',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'int64', .'random',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'int64', .'reversed',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'int64', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'int64', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'int64', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'int64', .'uniform',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'uint32', .'ordered',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'uint32', .'random',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'uint32', .'reversed',.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'uint32', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'uint32', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'uint32', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_argsort.'merge', 'uint32', .'uniform',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'float32', .'ordered',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'float32', .'random',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'float32', .'reversed',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'float32', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'float32', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'float32', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'float32', .'uniform',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'float64', .'ordered',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'float64', .'random',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'float64', .'reversed',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'float64', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'float64', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'float64', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'float64', .'uniform',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'int16', .'ordered',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'int16', .'random',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'int16', .'reversed',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'int16', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'int16', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'int16', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'int16', .'uniform',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'int32', .'ordered',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'int32', .'random',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'int32', .'reversed',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'int32', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'int32', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'int32', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'int32', .'uniform',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'int64', .'ordered',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'int64', .'random',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'int64', .'reversed',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'int64', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'int64', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'int64', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'int64', .'uniform',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'uint32', .'ordered',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'uint32', .'random',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'uint32', .'reversed',.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'uint32', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'uint32', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'uint32', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_argsort.'quick', 'uint32', .'uniform',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'float32', .'ordered',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'float32', .'random',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'float32', .'reversed',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'float32', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'float32', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'float32', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'float32', .'uniform',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'float64', .'ordered',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'float64', .'random',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'float64', .'reversed',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'float64', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'float64', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'float64', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'float64', .'uniform',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'int16', .'ordered',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'int16', .'random',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'int16', .'reversed',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'int16', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'int16', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'int16', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'int16', .'uniform',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'int32', .'ordered',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'int32', .'random',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'int32', .'reversed',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'int32', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'int32', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'int32', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'int32', .'uniform',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'int64', .'ordered',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'int64', .'random',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'int64', .'reversed',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'int64', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'int64', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'int64', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'int64', .'uniform',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'uint32', .'ordered',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'uint32', .'random',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'uint32', .'reversed',.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'uint32', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'uint32', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'uint32', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_sort.'heap', 'uint32', .'uniform',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'float32', .'ordered',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'float32', .'random',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'float32', .'reversed',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'float32', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'float32', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'float32', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'float32', .'uniform',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'float64', .'ordered',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'float64', .'random',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'float64', .'reversed',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'float64', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'float64', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'float64', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'float64', .'uniform',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'int16', .'ordered',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'int16', .'random',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'int16', .'reversed',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'int16', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'int16', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'int16', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'int16', .'uniform',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'int32', .'ordered',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'int32', .'random',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'int32', .'reversed',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'int32', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'int32', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'int32', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'int32', .'uniform',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'int64', .'ordered',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'int64', .'random',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'int64', .'reversed',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'int64', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'int64', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'int64', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'int64', .'uniform',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'uint32', .'ordered',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'uint32', .'random',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'uint32', .'reversed',.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'uint32', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'uint32', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'uint32', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_sort.'merge', 'uint32', .'uniform',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'float32', .'ordered',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'float32', .'random',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'float32', .'reversed',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'float32', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'float32', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'float32', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'float32', .'uniform',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'float64', .'ordered',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'float64', .'random',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'float64', .'reversed',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'float64', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'float64', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'float64', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'float64', .'uniform',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'int16', .'ordered',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'int16', .'random',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'int16', .'reversed',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'int16', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'int16', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'int16', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'int16', .'uniform',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'int32', .'ordered',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'int32', .'random',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'int32', .'reversed',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'int32', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'int32', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'int32', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'int32', .'uniform',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'int64', .'ordered',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'int64', .'random',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'int64', .'reversed',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'int64', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'int64', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'int64', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'int64', .'uniform',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'uint32', .'ordered',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'uint32', .'random',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'uint32', .'reversed',.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'uint32', .'sorted_block', 10.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'uint32', .'sorted_block', 100.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'uint32', .'sorted_block', 1000.." \
+      -b "bench_function_base.Sort.time_sort.'quick', 'uint32', .'uniform',.." \
+      -b "bench_function_base.Sort.time_sort_worst" \
+      -b "bench_lib.Nan.time_nanpercentile.200, 0." \
+      -b "bench_lib.Nan.time_nanpercentile.200, 0.1." \
+      -b "bench_lib.Nan.time_nanpercentile.200, 2.0." \
+      -b "bench_lib.Nan.time_nanpercentile.200, 50.0." \
+      -b "bench_lib.Nan.time_nanpercentile.200, 90.0." \
+      -b "bench_lib.Nan.time_nanpercentile.200000, 0." \
+      -b "bench_lib.Nan.time_nanpercentile.200000, 0.1." \
+      -b "bench_lib.Nan.time_nanpercentile.200000, 2.0." \
+      -b "bench_lib.Nan.time_nanpercentile.200000, 50.0." \
+      -b "bench_lib.Nan.time_nanpercentile.200000, 90.0." \
+      -b "bench_random.RNG.time_32bit.'MT19937'." \
+      -b "bench_random.RNG.time_32bit.'PCG64'." \
+      -b "bench_random.RNG.time_32bit.'Philox'." \
+      -b "bench_random.RNG.time_32bit.'SFC64'." \
+      -b "bench_random.RNG.time_32bit.'numpy'." \
+      -b "bench_random.RNG.time_64bit.'MT19937'." \
+      -b "bench_random.RNG.time_64bit.'PCG64'." \
+      -b "bench_random.RNG.time_64bit.'Philox'." \
+      -b "bench_random.RNG.time_64bit.'SFC64'." \
+      -b "bench_random.RNG.time_64bit.'numpy'." \
+      -b "bench_random.RNG.time_normal_zig.'MT19937'." \
+      -b "bench_random.RNG.time_normal_zig.'PCG64'." \
+      -b "bench_random.RNG.time_normal_zig.'Philox'." \
+      -b "bench_random.RNG.time_normal_zig.'SFC64'." \
+      -b "bench_random.RNG.time_normal_zig.'numpy'." \
+      -b "bench_random.RNG.time_raw.'MT19937'." \
+      -b "bench_random.RNG.time_raw.'PCG64'." \
+      -b "bench_random.RNG.time_raw.'Philox'." \
+      -b "bench_random.RNG.time_raw.'SFC64'." \
+      -b "bench_random.RNG.time_raw.'numpy'." \
+      -b "bench_xiecheng.ElementwiseBroadcast.time_normalise_and_sigmoid.4000." \
+      -b "bench_xiecheng.RandomAndStats.time_rng.4000." \
+      -b "bench_xiecheng.RandomAndStats.time_statistics.4000." \
+      -b "bench_xiecheng.SortSearch.time_argsort.4000." \
+      -b "bench_xiecheng.SortSearch.time_searchsorted.4000." \
+      -b "bench_xiecheng.SortSearch.time_sort.4000." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.int16'>, 100." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.int16'>, 10000." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.int16'>, 1000000." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.int32'>, 100." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.int32'>, 10000." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.int32'>, 1000000." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.int64'>, 100." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.int64'>, 10000." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.int64'>, 1000000." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.int8'>, 100." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.int8'>, 10000." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.int8'>, 1000000." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.longlong'>, 100." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.longlong'>, 10000." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.longlong'>, 1000000." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.uint16'>, 100." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.uint16'>, 10000." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.uint16'>, 1000000." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.uint32'>, 100." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.uint32'>, 10000." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.uint32'>, 1000000." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.uint64'>, 100." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.uint64'>, 10000." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.uint64'>, 1000000." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.uint8'>, 100." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.uint8'>, 10000." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.uint8'>, 1000000." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.ulonglong'>, 100." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.ulonglong'>, 10000." \
+      -b "bench_ufunc.CustomArrayFloorDivideInt.time_floor_divide_int.<class 'numpy.ulonglong'>, 1000000." \
+      -b "bench_ufunc.BinaryBench.time_pow.<class 'numpy.float64'>." \
+      -b "bench_ufunc.BinaryBench.time_pow_2.<class 'numpy.float64'>." \
+      -b "bench_ufunc.BinaryBench.time_pow_2_op.<class 'numpy.float64'>." \
+      -b "bench_ufunc.BinaryBench.time_pow_half.<class 'numpy.float64'>." \
+      -b "bench_ufunc.BinaryBench.time_pow_half_op.<class 'numpy.float64'>." \
+      -b "bench_ufunc.BinaryBenchInteger.time_pow.<class 'numpy.int64'>." \
+      -b "bench_ufunc.BinaryBenchInteger.time_pow_five.<class 'numpy.int64'>." \
+      -b "bench_ufunc.BinaryBenchInteger.time_pow_two.<class 'numpy.int64'>." \
+      -b "bench_ufunc.MethodsV1.time_ndarray_meth.'__pow__', 'float64'." \
+      -b "bench_ufunc.MethodsV1.time_ndarray_meth.'__pow__', 'int64'." \
+      -b "bench_scalar.ScalarMath.time_power_of_two.'float64'." \
+      -b "bench_scalar.ScalarMath.time_power_of_two.'int64'." \
+      -b "bench_ufunc.UFunc.time_ufunc_types.'sqrt'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'sqrt'>, 1, 1, 'd'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'sqrt'>, 1, 1, 'f'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'sqrt'>, 1, 1, 'd'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'sqrt'>, 1, 1, 'f'." \
+      -b "bench_ufunc.UFunc.time_ufunc_types.'log'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'log'>, 1, 1, 'd'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'log'>, 1, 1, 'f'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'log'>, 1, 1, 'd'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'log'>, 1, 1, 'f'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'cos'>, 1, 1, 'd'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'cos'>, 1, 1, 'f'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'cos'>, 1, 1, 'd'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'cos'>, 1, 1, 'f'." \
+      -b "bench_ufunc.UFunc.time_ufunc_types.'tan'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'tan'>, 1, 1, 'd'." \
+      -b "bench_ufunc_strides.UnaryFP.time_unary.<ufunc 'tan'>, 1, 1, 'f'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'tan'>, 1, 1, 'd'." \
+      -b "bench_ufunc_strides.UnaryFPSpecial.time_unary.<ufunc 'tan'>, 1, 1, 'f'." \
+      -b "bench_random.Randint.time_randint_fast" \
+      -b "bench_random.Randint.time_randint_slow" \
+      -b "bench_random.Randint_dtype.time_randint_fast.'uint64'." \
+      -b "bench_random.Randint_dtype.time_randint_slow.'uint64'." \
+      -b "bench_core.StatsMethods.time_max.'float64', 100." \
+      -b "bench_core.StatsMethods.time_max.'float64', 10000." \
+      -b "bench_core.StatsMethods.time_max.'int64', 100." \
+      -b "bench_core.StatsMethods.time_max.'int64', 10000." \
+      -b "bench_reduce.FMinMax.time_max.<class 'numpy.float64'>." \
+      -b "bench_reduce.StatsReductions.time_max.'float64'." \
+      -b "bench_reduce.StatsReductions.time_max.'int64'." \
+      -b "bench_lib.Nan.time_nanargmax.200, 0." \
+      -b "bench_lib.Nan.time_nanargmax.200, 0.1." \
+      -b "bench_lib.Nan.time_nanargmax.200, 2.0." \
+      -b "bench_lib.Nan.time_nanargmax.200, 50.0." \
+      -b "bench_lib.Nan.time_nanargmax.200, 90.0." \
+      -b "bench_lib.Nan.time_nanargmax.200000, 0." \
+      -b "bench_lib.Nan.time_nanargmax.200000, 0.1." \
+      -b "bench_lib.Nan.time_nanargmax.200000, 2.0." \
+      -b "bench_lib.Nan.time_nanargmax.200000, 50.0." \
+      -b "bench_lib.Nan.time_nanargmax.200000, 90.0." \
+      -b "bench_lib.Nan.time_nanargmin.200, 0." \
+      -b "bench_lib.Nan.time_nanargmin.200, 0.1." \
+      -b "bench_lib.Nan.time_nanargmin.200, 2.0." \
+      -b "bench_lib.Nan.time_nanargmin.200, 50.0." \
+      -b "bench_lib.Nan.time_nanargmin.200, 90.0." \
+      -b "bench_lib.Nan.time_nanargmin.200000, 0." \
+      -b "bench_lib.Nan.time_nanargmin.200000, 0.1." \
+      -b "bench_lib.Nan.time_nanargmin.200000, 2.0." \
+      -b "bench_lib.Nan.time_nanargmin.200000, 50.0." \
+      -b "bench_lib.Nan.time_nanargmin.200000, 90.0." \
+      -b "bench_function_base.Partition.time_argpartition.'float64', .'ordered',., 10." \
+      -b "bench_function_base.Partition.time_argpartition.'float64', .'ordered',., 100." \
+      -b "bench_function_base.Partition.time_argpartition.'float64', .'ordered',., 1000." \
+      -b "bench_function_base.Partition.time_argpartition.'float64', .'random',., 10." \
+      -b "bench_function_base.Partition.time_argpartition.'float64', .'random',., 100." \
+      -b "bench_function_base.Partition.time_argpartition.'float64', .'random',., 1000." \
+      -b "bench_function_base.Partition.time_argpartition.'float64', .'reversed',., 10." \
+      -b "bench_function_base.Partition.time_argpartition.'float64', .'reversed',., 100." \
+      -b "bench_function_base.Partition.time_argpartition.'float64', .'reversed',., 1000." \
+      -b "bench_function_base.Partition.time_argpartition.'float64', .'sorted_block', 10., 10." \
+      -b "bench_function_base.Partition.time_argpartition.'float64', .'sorted_block', 10., 100." \
+      -b "bench_function_base.Partition.time_argpartition.'float64', .'sorted_block', 10., 1000." \
+      -b "bench_function_base.Partition.time_argpartition.'float64', .'sorted_block', 100., 10." \
+      -b "bench_function_base.Partition.time_argpartition.'float64', .'sorted_block', 100., 100." \
+      -b "bench_function_base.Partition.time_argpartition.'float64', .'sorted_block', 100., 1000." \
+      -b "bench_function_base.Partition.time_argpartition.'float64', .'sorted_block', 1000., 10." \
+      -b "bench_function_base.Partition.time_argpartition.'float64', .'sorted_block', 1000., 100." \
+      -b "bench_function_base.Partition.time_argpartition.'float64', .'sorted_block', 1000., 1000." \
+      -b "bench_function_base.Partition.time_argpartition.'float64', .'uniform',., 10." \
+      -b "bench_function_base.Partition.time_argpartition.'float64', .'uniform',., 100." \
+      -b "bench_function_base.Partition.time_argpartition.'float64', .'uniform',., 1000." \
+      -b "bench_function_base.Partition.time_argpartition.'int64', .'ordered',., 10." \
+      -b "bench_function_base.Partition.time_argpartition.'int64', .'ordered',., 100." \
+      -b "bench_function_base.Partition.time_argpartition.'int64', .'ordered',., 1000." \
+      -b "bench_function_base.Partition.time_argpartition.'int64', .'random',., 10." \
+      -b "bench_function_base.Partition.time_argpartition.'int64', .'random',., 100." \
+      -b "bench_function_base.Partition.time_argpartition.'int64', .'random',., 1000." \
+      -b "bench_function_base.Partition.time_argpartition.'int64', .'reversed',., 10." \
+      -b "bench_function_base.Partition.time_argpartition.'int64', .'reversed',., 100." \
+      -b "bench_function_base.Partition.time_argpartition.'int64', .'reversed',., 1000." \
+      -b "bench_function_base.Partition.time_argpartition.'int64', .'sorted_block', 10., 10." \
+      -b "bench_function_base.Partition.time_argpartition.'int64', .'sorted_block', 10., 100." \
+      -b "bench_function_base.Partition.time_argpartition.'int64', .'sorted_block', 10., 1000." \
+      -b "bench_function_base.Partition.time_argpartition.'int64', .'sorted_block', 100., 10." \
+      -b "bench_function_base.Partition.time_argpartition.'int64', .'sorted_block', 100., 100." \
+      -b "bench_function_base.Partition.time_argpartition.'int64', .'sorted_block', 100., 1000." \
+      -b "bench_function_base.Partition.time_argpartition.'int64', .'sorted_block', 1000., 10." \
+      -b "bench_function_base.Partition.time_argpartition.'int64', .'sorted_block', 1000., 100." \
+      -b "bench_function_base.Partition.time_argpartition.'int64', .'sorted_block', 1000., 1000." \
+      -b "bench_function_base.Partition.time_argpartition.'int64', .'uniform',., 10." \
+      -b "bench_function_base.Partition.time_argpartition.'int64', .'uniform',., 100." \
+      -b "bench_function_base.Partition.time_argpartition.'int64', .'uniform',., 1000." \
+      -b "bench_function_base.Partition.time_partition.'float64', .'ordered',., 10." \
+      -b "bench_function_base.Partition.time_partition.'float64', .'ordered',., 100." \
+      -b "bench_function_base.Partition.time_partition.'float64', .'ordered',., 1000." \
+      -b "bench_function_base.Partition.time_partition.'float64', .'random',., 10." \
+      -b "bench_function_base.Partition.time_partition.'float64', .'random',., 100." \
+      -b "bench_function_base.Partition.time_partition.'float64', .'random',., 1000." \
+      -b "bench_function_base.Partition.time_partition.'float64', .'reversed',., 10." \
+      -b "bench_function_base.Partition.time_partition.'float64', .'reversed',., 100." \
+      -b "bench_function_base.Partition.time_partition.'float64', .'reversed',., 1000." \
+      -b "bench_function_base.Partition.time_partition.'float64', .'sorted_block', 10., 10." \
+      -b "bench_function_base.Partition.time_partition.'float64', .'sorted_block', 10., 100." \
+      -b "bench_function_base.Partition.time_partition.'float64', .'sorted_block', 10., 1000." \
+      -b "bench_function_base.Partition.time_partition.'float64', .'sorted_block', 100., 10." \
+      -b "bench_function_base.Partition.time_partition.'float64', .'sorted_block', 100., 100." \
+      -b "bench_function_base.Partition.time_partition.'float64', .'sorted_block', 100., 1000." \
+      -b "bench_function_base.Partition.time_partition.'float64', .'sorted_block', 1000., 10." \
+      -b "bench_function_base.Partition.time_partition.'float64', .'sorted_block', 1000., 100." \
+      -b "bench_function_base.Partition.time_partition.'float64', .'sorted_block', 1000., 1000." \
+      -b "bench_function_base.Partition.time_partition.'float64', .'uniform',., 10." \
+      -b "bench_function_base.Partition.time_partition.'float64', .'uniform',., 100." \
+      -b "bench_function_base.Partition.time_partition.'float64', .'uniform',., 1000." \
+      -b "bench_function_base.Partition.time_partition.'int64', .'ordered',., 10." \
+      -b "bench_function_base.Partition.time_partition.'int64', .'ordered',., 100." \
+      -b "bench_function_base.Partition.time_partition.'int64', .'ordered',., 1000." \
+      -b "bench_function_base.Partition.time_partition.'int64', .'random',., 10." \
+      -b "bench_function_base.Partition.time_partition.'int64', .'random',., 100." \
+      -b "bench_function_base.Partition.time_partition.'int64', .'random',., 1000." \
+      -b "bench_function_base.Partition.time_partition.'int64', .'reversed',., 10." \
+      -b "bench_function_base.Partition.time_partition.'int64', .'reversed',., 100." \
+      -b "bench_function_base.Partition.time_partition.'int64', .'reversed',., 1000." \
+      -b "bench_function_base.Partition.time_partition.'int64', .'sorted_block', 10., 10." \
+      -b "bench_function_base.Partition.time_partition.'int64', .'sorted_block', 10., 100." \
+      -b "bench_function_base.Partition.time_partition.'int64', .'sorted_block', 10., 1000." \
+      -b "bench_function_base.Partition.time_partition.'int64', .'sorted_block', 100., 10." \
+      -b "bench_function_base.Partition.time_partition.'int64', .'sorted_block', 100., 100." \
+      -b "bench_function_base.Partition.time_partition.'int64', .'sorted_block', 100., 1000." \
+      -b "bench_function_base.Partition.time_partition.'int64', .'sorted_block', 1000., 10." \
+      -b "bench_function_base.Partition.time_partition.'int64', .'sorted_block', 1000., 100." \
+      -b "bench_function_base.Partition.time_partition.'int64', .'sorted_block', 1000., 1000." \
+      -b "bench_function_base.Partition.time_partition.'int64', .'uniform',., 10." \
+      -b "bench_function_base.Partition.time_partition.'int64', .'uniform',., 100." \
+      -b "bench_function_base.Partition.time_partition.'int64', .'uniform',., 1000." \
+      -b "bench_core.StatsMethods.time_sum.'float64', 100." \
+      -b "bench_core.StatsMethods.time_sum.'float64', 10000." \
+      -b "bench_core.StatsMethods.time_sum.'int64', 100." \
+      -b "bench_core.StatsMethods.time_sum.'int64', 10000." \
+      -b "bench_core.StatsMethods.time_var.'float64', 100." \
+      -b "bench_core.StatsMethods.time_var.'float64', 10000." \
+      -b "bench_core.StatsMethods.time_var.'int64', 100." \
+      -b "bench_core.StatsMethods.time_var.'int64', 10000." \
+      -b "bench_ufunc.UFunc.time_ufunc_types.'maximum'." \
+      -b "bench_ufunc_strides.BinaryFP.time_binary.<ufunc 'maximum'>, 1, 1, 1, 'd'." \
+      -b "bench_ufunc_strides.BinaryFP.time_binary.<ufunc 'maximum'>, 1, 1, 1, 'f'." \
+      -b "bench_ufunc_strides.BinaryFP.time_binary_scalar_in0.<ufunc 'maximum'>, 1, 1, 1, 'd'." \
+      -b "bench_ufunc_strides.BinaryFP.time_binary_scalar_in0.<ufunc 'maximum'>, 1, 1, 1, 'f'." \
+      -b "bench_ufunc_strides.BinaryFPSpecial.time_binary.<ufunc 'maximum'>, 1, 1, 1, 'd'." \
+      -b "bench_ufunc_strides.BinaryFPSpecial.time_binary.<ufunc 'maximum'>, 1, 1, 1, 'f'." \
+      -b "bench_ufunc_strides.BinaryFPSpecial.time_binary_scalar_in0.<ufunc 'maximum'>, 1, 1, 1, 'd'." \
+      -b "bench_ufunc_strides.BinaryFPSpecial.time_binary_scalar_in0.<ufunc 'maximum'>, 1, 1, 1, 'f'." \
+      -b "bench_ufunc_strides.BinaryInt.time_binary.<ufunc 'maximum'>, 1, 1, 1, 'B'." \
+      -b "bench_ufunc_strides.BinaryInt.time_binary.<ufunc 'maximum'>, 1, 1, 1, 'H'." \
+      -b "bench_ufunc_strides.BinaryInt.time_binary.<ufunc 'maximum'>, 1, 1, 1, 'I'." \
+      -b "bench_ufunc_strides.BinaryInt.time_binary.<ufunc 'maximum'>, 1, 1, 1, 'L'." \
+      -b "bench_ufunc_strides.BinaryInt.time_binary.<ufunc 'maximum'>, 1, 1, 1, 'Q'." \
+      -b "bench_ufunc_strides.BinaryInt.time_binary.<ufunc 'maximum'>, 1, 1, 1, 'b'." \
+      -b "bench_ufunc_strides.BinaryInt.time_binary.<ufunc 'maximum'>, 1, 1, 1, 'h'." \
+      -b "bench_ufunc_strides.BinaryInt.time_binary.<ufunc 'maximum'>, 1, 1, 1, 'i'." \
+      -b "bench_ufunc_strides.BinaryInt.time_binary.<ufunc 'maximum'>, 1, 1, 1, 'l'." \
+      -b "bench_ufunc_strides.BinaryInt.time_binary.<ufunc 'maximum'>, 1, 1, 1, 'q'." \
+      -b "bench_ufunc_strides.BinaryInt.time_binary_scalar_in0.<ufunc 'maximum'>, 1, 1, 1, 'B'." \
+      -b "bench_ufunc_strides.BinaryInt.time_binary_scalar_in0.<ufunc 'maximum'>, 1, 1, 1, 'H'." \
+      -b "bench_ufunc_strides.BinaryInt.time_binary_scalar_in0.<ufunc 'maximum'>, 1, 1, 1, 'I'." \
+      -b "bench_ufunc_strides.BinaryInt.time_binary_scalar_in0.<ufunc 'maximum'>, 1, 1, 1, 'L'." \
+      -b "bench_ufunc_strides.BinaryInt.time_binary_scalar_in0.<ufunc 'maximum'>, 1, 1, 1, 'Q'." \
+      -b "bench_ufunc_strides.BinaryInt.time_binary_scalar_in0.<ufunc 'maximum'>, 1, 1, 1, 'b'." \
+      -b "bench_ufunc_strides.BinaryInt.time_binary_scalar_in0.<ufunc 'maximum'>, 1, 1, 1, 'h'." \
+      -b "bench_ufunc_strides.BinaryInt.time_binary_scalar_in0.<ufunc 'maximum'>, 1, 1, 1, 'i'." \
+      -b "bench_ufunc_strides.BinaryInt.time_binary_scalar_in0.<ufunc 'maximum'>, 1, 1, 1, 'l'." \
+      -b "bench_ufunc_strides.BinaryInt.time_binary_scalar_in0.<ufunc 'maximum'>, 1, 1, 1, 'q'."
+    INNER_EOF
+
+    docker cp /home/luozisheng/tmp/docker_script.sh mycontainer:/home/luozisheng/tmp/docker_script.sh
+    docker exec mycontainer bash /home/luozisheng/tmp/docker_script.sh
+    rm -rf results
+    mkdir -p results
+    docker cp mycontainer:${BASE_DIR}/numpy/benchmarks/results/. ${BASE_DIR}/numpy/benchmarks/results/
+    rm -f /home/luozisheng/tmp/docker_script.sh
+
+collect_scripts:
+  server1: |
+    export CONDA_NAME=l00668690
+    docker exec -i -e CONDA_NAME="${CONDA_NAME}" mycontainer /bin/bash <<'EOF'
+    eval "$(/home/miniconda3/bin/conda shell.bash hook)"
+    conda activate ${CONDA_NAME}
+    eval "$COLLECT_ENV"
+    EOF
+
+  server2: |
+    export CONDA_NAME=l00668690
+    docker exec -i -e CONDA_NAME="${CONDA_NAME}" mycontainer /bin/bash <<'EOF'
+    source /opt/rh/gcc-toolset-12/enable
+    conda activate ${CONDA_NAME}
+    eval "$COLLECT_ENV"
+    EOF
+
+compare:
+  show_all: true                  # 是否显示未变化的 benchmark
+  collect: false                  # 是否在 compare 前执行 collect 采集
+
+output:
+  dir: "./cmp_results"
+  custom_info: "zen4_vs_k920b_携程800_master_docker"       # 可选，自定义标识
+
+runtime:
+  ssh_timeout: 30
+  execution_timeout: 14400   # 命令执行超时 (秒)，默认 4 小时
+  log_level: "INFO"

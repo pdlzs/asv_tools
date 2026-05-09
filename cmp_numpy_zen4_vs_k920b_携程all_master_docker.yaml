@@ -1,0 +1,117 @@
+# ASV Benchmark 对比配置文件
+# 使用方法: python main.py cmp cmp.yaml
+
+machines:
+  server1:
+    host: 47.102.42.48
+    hostname: "zen4"
+    port: 22
+    username: luozisheng
+    identity_file: "/home/luo/.ssh/shared_ed25519"
+    asv_project_dir: /home/luozisheng/numpy/benchmarks
+
+  server2:
+    host: 116.205.130.173
+    hostname: "920b"
+    port: 22
+    username: luozisheng
+    identity_file: "/home/luo/.ssh/shared_ed25519"
+    asv_project_dir: /home/luozisheng/numpy/benchmarks
+
+compare_scripts:
+  server1: |
+    export CONDA_NAME=l00668690
+    export BASE_DIR=/home/luozisheng
+    cd ${BASE_DIR}/numpy/benchmarks
+
+    rm -rf results
+
+    # 确保临时目录存在（宿主机和容器内）
+    mkdir -p ~/tmp
+    docker exec mycontainer mkdir -p ~/tmp
+
+    # 创建临时脚本文件
+    cat > ~/tmp/docker_script.sh <<'INNER_EOF'
+    source /opt/rh/gcc-toolset-12/enable
+    export BASE_DIR=/home/luozisheng
+    export CONDA_NAME=l00668690
+    export OPENBLAS_NUM_THREADS=4
+    source /home/miniconda3/bin/activate && conda activate ${CONDA_NAME}
+    cd ${BASE_DIR}/numpy/benchmarks
+    rm -rf results
+    asv machine --yes
+    git config --global http.sslVerify false
+    git config --global --add safe.directory /home/luozisheng/numpy
+    git config --global --add safe.directory /home/luozisheng/numpy/.git
+    asv run -b "bench_clip"
+    INNER_EOF
+
+    docker cp ~/tmp/docker_script.sh mycontainer:~/tmp/docker_script.sh
+    docker exec mycontainer bash ~/tmp/docker_script.sh
+    rm -rf results
+    mkdir -p results
+    docker cp mycontainer:${BASE_DIR}/numpy/benchmarks/results/. ${BASE_DIR}/numpy/benchmarks/results/
+    rm -f ~/tmp/docker_script.sh
+
+  server2: |
+    export CONDA_NAME=l00668690
+    export BASE_DIR=/home/luozisheng
+    cd ${BASE_DIR}/numpy/benchmarks
+    rm -rf results
+
+    # 确保临时目录存在（宿主机和容器内）
+    mkdir -p ~/tmp
+    docker exec mycontainer mkdir -p ~/tmp
+
+    # 创建临时脚本文件
+    cat > ~/tmp/docker_script.sh <<'INNER_EOF'
+    source /opt/rh/gcc-toolset-12/enable
+    export BASE_DIR=/home/luozisheng
+    export CONDA_NAME=l00668690
+    export OPENBLAS_NUM_THREADS=4
+    conda activate ${CONDA_NAME}
+    cd ${BASE_DIR}/numpy/benchmarks
+    rm -rf results
+    asv machine --yes
+    git config --global http.sslVerify false
+    git config --global --add safe.directory /home/luozisheng/numpy
+    git config --global --add safe.directory /home/luozisheng/numpy/.git
+    asv run -b "bench_clip"
+    INNER_EOF
+
+    docker cp ~/tmp/docker_script.sh mycontainer:~/tmp/docker_script.sh
+    docker exec mycontainer bash ~/tmp/docker_script.sh
+    rm -rf results
+    mkdir -p results
+    docker cp mycontainer:${BASE_DIR}/numpy/benchmarks/results/. ${BASE_DIR}/numpy/benchmarks/results/
+    rm -f ~/tmp/docker_script.sh
+
+collect_scripts:
+  server1: |
+    export CONDA_NAME=l00668690
+    docker exec -i -e CONDA_NAME="${CONDA_NAME}" mycontainer /bin/bash <<'EOF'
+    eval "$(/home/miniconda3/bin/conda shell.bash hook)"
+    conda activate ${CONDA_NAME}
+    eval "$COLLECT_ENV"
+    EOF
+
+  server2: |
+    export CONDA_NAME=l00668690
+    docker exec -i -e CONDA_NAME="${CONDA_NAME}" mycontainer /bin/bash <<'EOF'
+    source /opt/rh/gcc-toolset-12/enable
+    conda activate ${CONDA_NAME}
+    eval "$COLLECT_ENV"
+    EOF
+
+compare:
+  show_all: true                  # 是否显示未变化的 benchmark
+  collect: false                  # 是否在 compare 前执行 collect 采集
+
+output:
+  dir: "./cmp_results"
+  custom_info: "zen4_vs_k920b_携程all_master_docker"       # 可选，自定义标识
+
+runtime:
+  ssh_timeout: 30
+  execution_timeout: 14400   # 命令执行超时 (秒)，默认 4 小时
+  log_level: "INFO"
