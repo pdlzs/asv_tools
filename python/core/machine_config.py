@@ -12,6 +12,7 @@ class MachineConfig:
     hostname: Optional[str] = None           # 显示名称（可选）
     port: int = 22
     username: Optional[str] = None
+    identity_file: Optional[str] = None      # SSH 密钥文件路径（可选）
     asv_project_dir: Optional[str] = None    # ASV 项目目录（collect 模式不需要）
 
     @property

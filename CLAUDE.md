@@ -117,12 +117,14 @@ python/
 **cmp 模式**:
 - 必须恰好 2 台机器，每台机器需 host、asv_project_dir，远程机器需 username
 - `host: "local"` 表示本地执行，跳过 SSH
+- `identity_file`: SSH 密钥文件路径（可选），用于指定密钥认证，如 `~/.ssh/shared_ed25519`
 - commit hash 修改: 为区分不同服务器结果，修改 commit_hash 添加服务器前缀 (如 `server1-abc123`)
 - ASV compare: 创建临时 merged_asv 目录，初始化 git repo，调用 `asv compare`
 
 **cont 模式**:
 - 支持一台或多台机器，每台机器上运行相同的 commit 对比
 - `host: "local"` 表示本地执行，远程机器需配置 username
+- `identity_file`: SSH 密钥文件路径（可选）
 - cont_scripts 完全控制执行内容，支持 `{work_dir}`、`{base}`、`{branch}` 占位符
 - commits 为可选配置，提供 `{base}` 和 `{branch}` 模板变量
 
@@ -131,6 +133,14 @@ python/
 **export 全局环境变量**: 三种模式均支持 YAML 顶层 `export:` 字段，定义的环境变量在 scripts 中可用作 `{VAR}` 模板占位符，运行时自动导出为 shell 环境变量。
 
 ## 配置文件格式
+
+**机器配置字段** (三种模式通用):
+- `host`: 主机地址，`"local"` 表示本地执行
+- `username`: SSH 用户名（远程机器必填）
+- `port`: SSH 端口（默认 22）
+- `identity_file`: SSH 密钥文件路径（可选），如 `~/.ssh/shared_ed25519`
+- `hostname`: 显示名称（可选，用于报告标识机器）
+- `asv_project_dir`: ASV 项目目录（cmp/cont 模式必填）
 
 **cmp 配置** (`cmp.yaml`):
 - `export`: 全局环境变量（可选），可在 scripts 中以 `{VAR}` 引用

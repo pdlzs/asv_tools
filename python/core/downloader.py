@@ -47,6 +47,7 @@ def download_results(
         host=machine.host,
         username=machine.username or "",
         port=machine.port,
+        identity_file=machine.identity_file,
         timeout=ssh_timeout
     )
 

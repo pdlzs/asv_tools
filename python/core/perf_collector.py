@@ -196,6 +196,7 @@ echo '=== COLLECT_DONE ==='
             host=self.machine.host,
             username=self.machine.username or "",
             port=self.machine.port,
+            identity_file=self.machine.identity_file,
             timeout=self.ssh_timeout,
             execution_timeout=self.execution_timeout
         )

@@ -86,6 +86,7 @@ def load_cont_config(config_path: str) -> ContConfig:
             hostname=m.get("hostname"),
             port=m.get("port", 22),
             username=m.get("username"),
+            identity_file=m.get("identity_file"),
             asv_project_dir=m.get("asv_project_dir")
         )
 

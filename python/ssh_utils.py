@@ -17,6 +17,7 @@ class SSHConfig:
     host: str
     username: str
     port: int = 22
+    identity_file: Optional[str] = None     # SSH 密钥文件路径
     timeout: int = 30              # 连接超时 (秒)
     execution_timeout: int = 3600  # 执行超时 (秒)，默认 1 小时
 
@@ -37,16 +38,20 @@ class SSHClient:
             return True
 
         try:
+            ssh_cmd = [
+                "ssh",
+                "-o", f"ConnectTimeout={self.config.timeout}",
+                "-o", "BatchMode=yes",
+                "-o", "StrictHostKeyChecking=no",
+                "-p", str(self.config.port)
+            ]
+            if self.config.identity_file:
+                ssh_cmd.extend(["-i", self.config.identity_file])
+            ssh_cmd.append(f"{self.config.username}@{self.config.host}")
+            ssh_cmd.append("echo 'Connection successful'")
+
             result = subprocess.run(
-                [
-                    "ssh",
-                    "-o", f"ConnectTimeout={self.config.timeout}",
-                    "-o", "BatchMode=yes",
-                    "-o", "StrictHostKeyChecking=no",
-                    "-p", str(self.config.port),
-                    f"{self.config.username}@{self.config.host}",
-                    "echo 'Connection successful'"
-                ],
+                ssh_cmd,
                 capture_output=True,
                 timeout=self.config.timeout + 5
             )
@@ -113,30 +118,30 @@ class SSHClient:
         """远程执行命令"""
         import sys
         import threading
+        import time
         full_command = f"cd {work_dir} && bash -s" if work_dir else "bash -s"
-
-        # DEBUG: 打印脚本信息
-        print(f"[DEBUG] 远程执行命令到 {self.config.host}")
-        print(f"[DEBUG] 脚本长度: {len(command)} 字符")
-        print(f"[DEBUG] execution_timeout: {self.config.execution_timeout} 秒")
 
         try:
             if stream_output:
                 # 实时输出模式
                 # SSH keepalive 选项: 每 30 秒发送心跳，容忍 4 小时无响应 (480 次 × 30 秒)
                 # 适应长时间运行的 benchmark (如 ASV run 持续 2+ 小时)
+                ssh_cmd = [
+                    "ssh",
+                    "-o", f"ConnectTimeout={self.config.timeout}",
+                    "-o", "ServerAliveInterval=30",
+                    "-o", "ServerAliveCountMax=480",
+                    "-o", "BatchMode=yes",
+                    "-o", "StrictHostKeyChecking=no",
+                    "-p", str(self.config.port)
+                ]
+                if self.config.identity_file:
+                    ssh_cmd.extend(["-i", self.config.identity_file])
+                ssh_cmd.append(f"{self.config.username}@{self.config.host}")
+                ssh_cmd.append(full_command)
+
                 process = subprocess.Popen(
-                    [
-                        "ssh",
-                        "-o", f"ConnectTimeout={self.config.timeout}",
-                        "-o", "ServerAliveInterval=30",
-                        "-o", "ServerAliveCountMax=480",
-                        "-o", "BatchMode=yes",
-                        "-o", "StrictHostKeyChecking=no",
-                        "-p", str(self.config.port),
-                        f"{self.config.username}@{self.config.host}",
-                        full_command
-                    ],
+                    ssh_cmd,
                     stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
@@ -144,92 +149,64 @@ class SSHClient:
                     bufsize=0
                 )
 
-                print(f"[DEBUG] SSH 进程已启动, PID: {process.pid}")
-
                 output_lines = []
-                stdout_read_count = 0
-                exception_in_reader = None
 
                 def read_stdout():
                     """线程函数：读取 stdout 并实时打印"""
-                    nonlocal stdout_read_count, exception_in_reader
                     try:
                         for line in process.stdout:
                             print(line, end='')
                             output_lines.append(line)
-                            stdout_read_count += 1
-                    except Exception as e:
-                        exception_in_reader = str(e)
-                        print(f"[DEBUG] stdout 读取线程异常: {e}")
+                    except Exception:
+                        pass
 
                 # 启动 stdout 读取线程（必须先启动，否则可能阻塞）
                 reader_thread = threading.Thread(target=read_stdout, daemon=True)
                 reader_thread.start()
-                print(f"[DEBUG] stdout 读取线程已启动")
 
-                # 发送脚本并立即关闭 stdin
-                # 脚本中的 heredoc 在发送时就完整包含在 stdin buffer 中
-                # 远程 bash 解析 heredoc 时从 buffer 读取，stdin 关闭不影响已发送内容
-                print(f"[DEBUG] 开始写入脚本到 stdin...")
+                # 发送脚本到 stdin
+                # 注意：脚本中可能包含嵌套 heredoc (如 <<'INNER_EOF')
+                # 需要等待一小段时间让远程 bash 开始读取 stdin 内容
+                # 然后再关闭 stdin，否则嵌套 heredoc 可能无法正确解析
                 process.stdin.write(command)
                 process.stdin.flush()
-                print(f"[DEBUG] 脚本已写入 stdin, 准备关闭 stdin...")
+
+                # 等待远程 bash 开始读取 stdin（约 100ms）
+                time.sleep(0.1)
                 process.stdin.close()
-                print(f"[DEBUG] stdin 已关闭")
 
                 # 等待进程完成或超时
-                print(f"[DEBUG] 开始等待进程完成 (最长 {self.config.execution_timeout} 秒)...")
                 try:
                     process.wait(timeout=self.config.execution_timeout)
-                    print(f"[DEBUG] 进程已结束, returncode: {process.returncode}")
                 except subprocess.TimeoutExpired:
-                    print(f"[DEBUG] 进程超时, 正在终止...")
                     process.kill()
                     process.wait()
-                    print(f"[DEBUG] 进程已终止, returncode: {process.returncode}")
                     return False, f"命令执行超时 ({self.config.execution_timeout}秒)"
 
                 # 等待 stdout 线程完成
-                print(f"[DEBUG] 等待 stdout 线程完成...")
                 reader_thread.join(timeout=5)
-                print(f"[DEBUG] stdout 线程已完成")
-                print(f"[DEBUG] stdout 读取行数: {stdout_read_count}")
-                if exception_in_reader:
-                    print(f"[DEBUG] stdout 线程曾有异常: {exception_in_reader}")
 
                 output = ''.join(output_lines)
-
-                # DEBUG: 打印最终结果
-                print(f"[DEBUG] 最终 returncode: {process.returncode}")
-                print(f"[DEBUG] 输出长度: {len(output)} 字符")
-
-                # 如果 returncode != 0, 打印更多诊断信息
-                if process.returncode != 0:
-                    print(f"[DEBUG] ===== 执行失败诊断信息 =====")
-                    print(f"[DEBUG] SSH 命令: ssh {self.config.username}@{self.config.host} '{full_command}'")
-                    print(f"[DEBUG] 脚本内容预览 (前 500 字符):")
-                    print(command[:500])
-                    print(f"[DEBUG] 脚本内容预览 (最后 500 字符):")
-                    print(command[-500:])
-                    print(f"[DEBUG] 输出内容预览 (最后 1000 字符):")
-                    print(output[-1000:] if len(output) > 1000 else output)
-                    print(f"[DEBUG] ===== 诊断信息结束 =====")
 
                 return process.returncode == 0, output
             else:
                 # 捕获输出模式 - 也添加 keepalive (适应长时间运行)
+                ssh_cmd = [
+                    "ssh",
+                    "-o", f"ConnectTimeout={self.config.timeout}",
+                    "-o", "ServerAliveInterval=30",
+                    "-o", "ServerAliveCountMax=480",
+                    "-o", "BatchMode=yes",
+                    "-o", "StrictHostKeyChecking=no",
+                    "-p", str(self.config.port)
+                ]
+                if self.config.identity_file:
+                    ssh_cmd.extend(["-i", self.config.identity_file])
+                ssh_cmd.append(f"{self.config.username}@{self.config.host}")
+                ssh_cmd.append(full_command)
+
                 result = subprocess.run(
-                    [
-                        "ssh",
-                        "-o", f"ConnectTimeout={self.config.timeout}",
-                        "-o", "ServerAliveInterval=30",
-                        "-o", "ServerAliveCountMax=480",
-                        "-o", "BatchMode=yes",
-                        "-o", "StrictHostKeyChecking=no",
-                        "-p", str(self.config.port),
-                        f"{self.config.username}@{self.config.host}",
-                        full_command
-                    ],
+                    ssh_cmd,
                     input=command,
                     capture_output=True,
                     text=True,
@@ -272,17 +249,21 @@ class SSHClient:
 
         # 远程下载
         try:
+            scp_cmd = [
+                "scp",
+                "-o", f"ConnectTimeout={self.config.timeout}",
+                "-o", "BatchMode=yes",
+                "-o", "StrictHostKeyChecking=no",
+                "-P", str(self.config.port),
+                "-r"
+            ]
+            if self.config.identity_file:
+                scp_cmd.extend(["-i", self.config.identity_file])
+            scp_cmd.append(f"{self.config.username}@{self.config.host}:{remote_path}")
+            scp_cmd.append(local_path)
+
             result = subprocess.run(
-                [
-                    "scp",
-                    "-o", f"ConnectTimeout={self.config.timeout}",
-                    "-o", "BatchMode=yes",
-                    "-o", "StrictHostKeyChecking=no",
-                    "-P", str(self.config.port),
-                    "-r",
-                    f"{self.config.username}@{self.config.host}:{remote_path}",
-                    local_path
-                ],
+                scp_cmd,
                 capture_output=True,
                 timeout=300  # 5 minutes timeout for download
             )
@@ -295,8 +276,8 @@ class SSHClient:
             return False
 
 
-def test_connection(host: str, username: str, port: int = 22, timeout: int = 30) -> bool:
+def test_connection(host: str, username: str, port: int = 22, identity_file: Optional[str] = None, timeout: int = 30) -> bool:
     """测试 SSH 连接"""
-    config = SSHConfig(host=host, username=username, port=port, timeout=timeout)
+    config = SSHConfig(host=host, username=username, port=port, identity_file=identity_file, timeout=timeout)
     client = SSHClient(config)
     return client.test_connection()

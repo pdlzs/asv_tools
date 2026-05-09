@@ -33,10 +33,6 @@ def execute_on_machine(
     Returns:
         成功返回 True
     """
-    # DEBUG: 打印机器信息
-    print(f"[DEBUG] execute_on_machine: machine={machine.name}, host={machine.host}, port={machine.port}")
-    print(f"[DEBUG] ssh_timeout={ssh_timeout}, execution_timeout={execution_timeout}")
-
     # 拼装模板变量上下文
     template_vars = {"work_dir": machine.asv_project_dir}
     if export_vars:
@@ -48,9 +44,6 @@ def execute_on_machine(
     # 前置 export 语句
     prefix = build_export_statements(export_vars or {})
     final_script = prefix + rendered_script
-
-    # DEBUG: 打印脚本长度
-    print(f"[DEBUG] 最终脚本长度: {len(final_script)} 字符")
 
     if dry_run:
         print(f"[DRY-RUN] 将在 {machine.name} 上执行:")
@@ -67,6 +60,7 @@ def execute_on_machine(
         host=machine.host,
         username=machine.username or "",
         port=machine.port,
+        identity_file=machine.identity_file,
         timeout=ssh_timeout,
         execution_timeout=execution_timeout
     )
@@ -75,21 +69,13 @@ def execute_on_machine(
 
     # 测试连接（本地机器会直接返回 True）
     if not client.test_connection():
-        print(f"[DEBUG] 连接测试失败")
         print(f"无法连接到 {machine.name}")
         return False
-
-    print(f"[DEBUG] 连接测试成功")
 
     # 执行脚本
     success, output = client.execute(final_script, machine.asv_project_dir, stream_output=stream_output)
 
     print("-" * 40)
-
-    # DEBUG: 打印执行结果
-    print(f"[DEBUG] execute 返回: success={success}")
-    if not success:
-        print(f"[DEBUG] 失败原因: {output}")
 
     if not success:
         print(f"在 {machine.name} 上执行脚本失败")

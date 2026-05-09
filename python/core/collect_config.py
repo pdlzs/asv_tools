@@ -71,7 +71,8 @@ def load_collect_config(config_path: str) -> CollectConfig:
             host=m["host"],
             hostname=m.get("hostname"),       # 可选的显示名称
             port=m.get("port", 22),
-            username=m.get("username")
+            username=m.get("username"),
+            identity_file=m.get("identity_file")
         )
 
     # 解析 collect_scripts（兼容旧版 scripts 字段名）

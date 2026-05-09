@@ -220,7 +220,7 @@ def test_connections(config: CollectConfig, verbose: bool = False) -> bool:
             continue
 
         print(f"[{name}] 测试连接到 {machine.host}...")
-        if not test_connection(machine.host, machine.username, machine.port):
+        if not test_connection(machine.host, machine.username, machine.port, machine.identity_file):
             print(f"[{name}] 无法连接到 {machine.host}", file=sys.stderr)
             return False
 

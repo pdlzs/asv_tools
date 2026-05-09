@@ -155,6 +155,7 @@ def run_continuous(args) -> int:
                 host=machine.host,
                 username=machine.username or "",
                 port=machine.port,
+                identity_file=machine.identity_file,
                 timeout=config.runtime.ssh_timeout
             )
             ssh_client = SSHClient(ssh_config)

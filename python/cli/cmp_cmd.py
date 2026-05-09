@@ -175,7 +175,7 @@ def run_compare(args) -> int:
             for name, machine in config.machines.items():
                 if not machine.is_local:
                     print(f"测试连接到 {name} ({machine.host})...")
-                    if not test_connection(machine.host, machine.username, machine.port):
+                    if not test_connection(machine.host, machine.username, machine.port, machine.identity_file):
                         print(f"无法连接到 {name}", file=sys.stderr)
                         return 1
             print("SSH 连接验证成功")
