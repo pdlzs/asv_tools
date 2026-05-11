@@ -22,69 +22,48 @@ compare_scripts:
   server1: |
     export CONDA_NAME=l00668690
     export BASE_DIR=/home/luozisheng
+    export OPENBLAS_NUM_THREADS=4
     cd ${BASE_DIR}/numpy/benchmarks
-
     rm -rf results
 
-    # 确保临时目录存在（宿主机和容器内）
-    mkdir -p ~/tmp
-    docker exec mycontainer mkdir -p ~/tmp
-
-    # 创建临时脚本文件
-    cat > ~/tmp/docker_script.sh <<'INNER_EOF'
+    docker exec -i -e CONDA_NAME -e BASE_DIR -e OPENBLAS_NUM_THREADS mycontainer /bin/bash <<'EOF'
     source /opt/rh/gcc-toolset-12/enable
-    export BASE_DIR=/home/luozisheng
-    export CONDA_NAME=l00668690
-    export OPENBLAS_NUM_THREADS=4
     source /home/miniconda3/bin/activate && conda activate ${CONDA_NAME}
     cd ${BASE_DIR}/numpy/benchmarks
     rm -rf results
     asv machine --yes
     git config --global http.sslVerify false
-    git config --global --add safe.directory /home/luozisheng/numpy
-    git config --global --add safe.directory /home/luozisheng/numpy/.git
-    asv run -b "bench_clip"
-    INNER_EOF
+    git config --global --add safe.directory ${BASE_DIR}/numpy
+    git config --global --add safe.directory ${BASE_DIR}/numpy/.git
+    asv run
+    EOF
 
-    docker cp ~/tmp/docker_script.sh mycontainer:~/tmp/docker_script.sh
-    docker exec mycontainer bash ~/tmp/docker_script.sh
     rm -rf results
     mkdir -p results
     docker cp mycontainer:${BASE_DIR}/numpy/benchmarks/results/. ${BASE_DIR}/numpy/benchmarks/results/
-    rm -f ~/tmp/docker_script.sh
 
   server2: |
     export CONDA_NAME=l00668690
     export BASE_DIR=/home/luozisheng
+    export OPENBLAS_NUM_THREADS=4
     cd ${BASE_DIR}/numpy/benchmarks
     rm -rf results
 
-    # 确保临时目录存在（宿主机和容器内）
-    mkdir -p ~/tmp
-    docker exec mycontainer mkdir -p ~/tmp
-
-    # 创建临时脚本文件
-    cat > ~/tmp/docker_script.sh <<'INNER_EOF'
+    docker exec -i -e CONDA_NAME -e BASE_DIR -e OPENBLAS_NUM_THREADS mycontainer /bin/bash <<'EOF'
     source /opt/rh/gcc-toolset-12/enable
-    export BASE_DIR=/home/luozisheng
-    export CONDA_NAME=l00668690
-    export OPENBLAS_NUM_THREADS=4
     conda activate ${CONDA_NAME}
     cd ${BASE_DIR}/numpy/benchmarks
     rm -rf results
     asv machine --yes
     git config --global http.sslVerify false
-    git config --global --add safe.directory /home/luozisheng/numpy
-    git config --global --add safe.directory /home/luozisheng/numpy/.git
-    asv run -b "bench_clip"
-    INNER_EOF
+    git config --global --add safe.directory ${BASE_DIR}/numpy
+    git config --global --add safe.directory ${BASE_DIR}/numpy/.git
+    asv run
+    EOF
 
-    docker cp ~/tmp/docker_script.sh mycontainer:~/tmp/docker_script.sh
-    docker exec mycontainer bash ~/tmp/docker_script.sh
     rm -rf results
     mkdir -p results
     docker cp mycontainer:${BASE_DIR}/numpy/benchmarks/results/. ${BASE_DIR}/numpy/benchmarks/results/
-    rm -f ~/tmp/docker_script.sh
 
 collect_scripts:
   server1: |
