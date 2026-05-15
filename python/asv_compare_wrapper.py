@@ -82,8 +82,91 @@ def get_machine_name(asv_dir: str) -> str:
     raise ValueError(f"在 {asv_dir} 中未找到机器信息")
 
 
-def generate_excel_from_table(table_output: str, output_dir: Path, server1: str, server2: str, timestamp: Optional[str] = None):
-    """从 ASV 表格输出生成 Excel 文件"""
+def filter_ratio_na_lines(table_output: str, skip_ratio_na: bool = False) -> str:
+    """过滤掉 Ratio 为 n/a 的行
+
+    Args:
+        table_output: ASV compare 输出的表格文本
+        skip_ratio_na: 是否跳过 Ratio 为 n/a 的行
+
+    Returns:
+        过滤后的表格文本（如果 skip_ratio_na=True），否则返回原文本
+    """
+    if not skip_ratio_na:
+        return table_output
+
+    lines = [line for line in table_output.split('\n') if line.strip()]
+
+    # 找到表格开始位置
+    table_start_idx = -1
+    for i, line in enumerate(lines):
+        if '|' in line and ('Change' in line or 'Before' in line or 'After' in line):
+            table_start_idx = i
+            break
+
+    if table_start_idx == -1:
+        return table_output
+
+    # 保留表格之前的内容（如 "All benchmarks" 等说明）
+    prefix_lines = lines[:table_start_idx]
+    table_lines = lines[table_start_idx:]
+
+    # 找到 Ratio 列的索引
+    ratio_col_idx = -1
+    if table_lines:
+        header_cols = [col.strip() for col in table_lines[0].split('|')]
+        header_cols = header_cols[1:-1]  # 移除首尾空列
+        for idx, col in enumerate(header_cols):
+            if col == 'Ratio':
+                ratio_col_idx = idx
+                break
+
+    if ratio_col_idx < 0:
+        return table_output  # 没有 Ratio 列，不过滤
+
+    # 过滤掉 Ratio 为 n/a 的行
+    filtered_lines = []
+    filtered_count = 0
+    for i, line in enumerate(table_lines):
+        if i <= 1:  # 保留标题行和分隔行
+            filtered_lines.append(line)
+            continue
+
+        cols = [col.strip() for col in line.split('|')]
+        cols = cols[1:-1]  # 移除首尾空列
+
+        if len(cols) > ratio_col_idx:
+            ratio_val = cols[ratio_col_idx]
+            if ratio_val == 'n/a':
+                filtered_count += 1
+                continue  # 跳过 Ratio 为 n/a 的行
+
+        filtered_lines.append(line)
+
+    if filtered_count > 0:
+        print(f"已过滤 {filtered_count} 行 Ratio 为 n/a 的数据")
+
+    # 合并前缀和过滤后的表格
+    result_lines = prefix_lines + filtered_lines
+    return '\n'.join(result_lines)
+
+
+def generate_excel_from_table(
+    table_output: str,
+    output_dir: Path,
+    server1: str,
+    server2: str,
+    timestamp: Optional[str] = None
+):
+    """从 ASV 表格输出生成 Excel 文件
+
+    Args:
+        table_output: ASV compare 输出的表格文本（已过滤）
+        output_dir: 输出目录
+        server1: 服务器1名称
+        server2: 服务器2名称
+        timestamp: 时间戳（可选）
+    """
     try:
         import openpyxl
         import openpyxl.utils
@@ -192,7 +275,9 @@ def compare_results(
     output_dir: Path,
     show_all: bool = True,
     verbose: bool = False,
-    timestamp: Optional[str] = None
+    timestamp: Optional[str] = None,
+    skip_excel: bool = False,
+    skip_ratio_na: bool = False
 ) -> bool:
     """
     执行 ASV 结果对比（使用命令行方式）
@@ -205,6 +290,9 @@ def compare_results(
         output_dir: 输出目录
         show_all: 是否显示所有 benchmark
         verbose: 是否显示详细输出
+        timestamp: 时间戳（可选）
+        skip_excel: 是否跳过生成 Excel 文件
+        skip_ratio_na: 是否跳过 Ratio 为 n/a 的行（影响 TXT 和 Excel）
 
     Returns:
         成功返回 True
@@ -370,15 +458,19 @@ def compare_results(
 
     print(table_output)
 
+    # 过滤 Ratio 为 n/a 的行（如果启用）
+    filtered_table_output = filter_ratio_na_lines(table_output, skip_ratio_na)
+
     # 文件名：带时间戳（与输出目录同名）
     file_suffix = f"_{timestamp}" if timestamp else ""
     txt_output_path = output_dir / f"{server1_name}_vs_{server2_name}_table{file_suffix}.txt"
     with open(txt_output_path, 'w', encoding='utf-8') as f:
         header = f"Compare: {server1_name} [{commit1}] vs {server2_name} [{commit2}]\n\n"
-        f.write(header + table_output)
+        f.write(header + filtered_table_output)
     print(f"\n表格已保存到: {txt_output_path}")
 
     # 生成 Excel 文件
-    generate_excel_from_table(table_output, output_dir, server1_name, server2_name, timestamp)
+    if not skip_excel:
+        generate_excel_from_table(filtered_table_output, output_dir, server1_name, server2_name, timestamp)
 
     return True

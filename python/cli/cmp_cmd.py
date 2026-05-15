@@ -238,7 +238,9 @@ def run_compare(args) -> int:
                 output_dir,
                 show_all=config.compare.show_all,
                 verbose=args.verbose,
-                timestamp=timestamp
+                timestamp=timestamp,
+                skip_excel=config.output.skip_excel,
+                skip_ratio_na=config.output.skip_ratio_na
             ):
                 print("ASV 结果对比失败", file=sys.stderr)
                 return 1

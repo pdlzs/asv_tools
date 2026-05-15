@@ -19,6 +19,8 @@ class OutputConfig:
     """输出配置"""
     dir: str = "./cmp_results"
     custom_info: Optional[str] = None
+    skip_excel: bool = False           # 是否跳过生成 Excel 文件
+    skip_ratio_na: bool = False        # 是否跳过 Ratio 为 n/a 的行（影响 TXT 和 Excel）
 
 
 @dataclass
@@ -111,7 +113,9 @@ def load_config(config_path: str) -> Config:
         ),
         output=OutputConfig(
             dir=output_data.get("dir", "./cmp_results"),
-            custom_info=output_data.get("custom_info")
+            custom_info=output_data.get("custom_info"),
+            skip_excel=output_data.get("skip_excel", False),
+            skip_ratio_na=output_data.get("skip_ratio_na", False)
         ),
         runtime=RuntimeConfig(
             ssh_timeout=runtime_data.get("ssh_timeout", 30),

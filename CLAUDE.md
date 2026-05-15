@@ -150,6 +150,8 @@ python/
 - `compare.show_all`: 是否显示未变化的 benchmark
 - `compare.collect`: 是否在 compare 前执行 collect 采集（默认 false）
 - `output.dir`: 输出目录，默认 `./cmp_results`
+- `output.skip_excel`: 是否跳过生成 Excel 文件（默认 false）
+- `output.skip_ratio_na`: 是否跳过 Ratio 为 n/a 的行（默认 false，影响 TXT 和 Excel）
 
 **collect 采集输出**: 当 `compare.collect: true` 时，采集结果保存在输出目录的 `perf_config/` 子目录下。
 

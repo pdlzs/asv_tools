@@ -50,6 +50,8 @@ compare:
 output:
   dir: "./cmp_results"
   custom_info: "numpy_test"       # 可选，自定义标识
+  skip_excel: false               # 是否跳过生成 Excel 文件
+  skip_ratio_na: false            # 是否跳过 Ratio 为 n/a 的行（影响 TXT 和 Excel）
 
 runtime:
   ssh_timeout: 30           # SSH 连接超时 (秒)
