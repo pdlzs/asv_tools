@@ -1,14 +1,22 @@
-"""统一的模板变量替换 — 处理 scripts 中的 {var} 占位符"""
+"""统一的模板变量替换 — 处理 scripts 和 custom_info 中的 {var} 占位符"""
 
 from typing import Dict
 
 
-def render_template(script: str, **variables) -> str:
-    """替换脚本中的 {var} 占位符，值可能为 None 则跳过"""
+def render_template(template: str, **variables) -> str:
+    """替换模板中的 {var} 占位符，值为 None 时跳过
+
+    Args:
+        template: 包含占位符的模板字符串
+        **variables: 变量名和值的字典
+
+    Returns:
+        替换后的字符串
+    """
     for key, value in variables.items():
         if value is not None:
-            script = script.replace(f"{{{key}}}", str(value))
-    return script
+            template = template.replace(f"{{{key}}}", str(value))
+    return template
 
 
 def build_export_statements(export_vars: Dict[str, str]) -> str:

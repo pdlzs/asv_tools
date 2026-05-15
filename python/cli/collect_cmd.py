@@ -194,8 +194,11 @@ def create_output_dir(config: CollectConfig, args) -> Path:
     """创建输出目录"""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    # 确定自定义标识
-    custom_info = args.info if hasattr(args, 'info') and args.info else config.output.custom_info
+    # 确定自定义标识（支持 export 变量模板渲染）
+    # 优先使用命令行参数，其次配置文件，都支持模板渲染
+    custom_info = (args.info if hasattr(args, 'info') else None) or config.output.custom_info
+    if custom_info and config.export:
+        custom_info = render_template(custom_info, **config.export)
 
     if custom_info:
         dir_name = f"perf_config_{timestamp}_{custom_info}"

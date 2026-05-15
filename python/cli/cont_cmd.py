@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import List
 
 from core.cont_config import load_cont_config
-from core.template import build_export_statements
+from core.template import build_export_statements, render_template
 from ssh_utils import SSHClient, SSHConfig
 
 
@@ -64,9 +64,11 @@ def save_output_summary(config, results: List[tuple]) -> None:
     output_dir = Path(config.output.dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # 生成文件名
+    # 生成文件名（支持 export 变量模板渲染）
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     info = config.output.custom_info or "continuous"
+    if info and config.export:
+        info = render_template(info, **config.export)
     filename = f"{info}_{timestamp}_summary.txt"
 
     output_file = output_dir / filename
