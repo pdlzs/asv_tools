@@ -5,7 +5,7 @@ Uses subprocess to call ssh/scp commands directly.
 """
 
 from dataclasses import dataclass
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Callable
 import subprocess
 import shutil
 from pathlib import Path
@@ -59,7 +59,9 @@ class SSHClient:
         except (subprocess.TimeoutExpired, Exception):
             return False
 
-    def execute(self, command: str, work_dir: Optional[str] = None, stream_output: bool = True) -> Tuple[bool, str]:
+    def execute(self, command: str, work_dir: Optional[str] = None,
+                stream_output: bool = True,
+                output_callback: Optional[Callable] = None) -> Tuple[bool, str]:
         """
         执行命令
 
@@ -67,21 +69,23 @@ class SSHClient:
             command: 要执行的命令
             work_dir: 工作目录
             stream_output: 是否实时输出到终端（默认 True）
+            output_callback: 输出回调函数（可选），每输出一行调用 callback(machine_name, line)
 
         Returns:
             (success, output) 元组
         """
         if self.config.is_local:
-            return self._execute_local(command, work_dir, stream_output)
+            return self._execute_local(command, work_dir, stream_output, output_callback)
         else:
-            return self._execute_remote(command, work_dir, stream_output)
+            return self._execute_remote(command, work_dir, stream_output, output_callback)
 
-    def _execute_local(self, command: str, work_dir: Optional[str], stream_output: bool) -> Tuple[bool, str]:
+    def _execute_local(self, command: str, work_dir: Optional[str],
+                        stream_output: bool, output_callback: Optional[Callable]) -> Tuple[bool, str]:
         """本地执行命令"""
         import sys
         try:
-            if stream_output:
-                # 实时输出到终端（使用 Popen 实现真正的实时输出）
+            if stream_output or output_callback:
+                # 实时输出到终端或回调
                 process = subprocess.Popen(
                     command,
                     shell=True,
@@ -94,7 +98,10 @@ class SSHClient:
 
                 output_lines = []
                 for line in process.stdout:
-                    print(line, end='')
+                    if stream_output:
+                        print(line, end='')
+                    if output_callback:
+                        output_callback(line.rstrip())
                     output_lines.append(line)
 
                 process.wait()
@@ -114,7 +121,8 @@ class SSHClient:
         except Exception as e:
             return False, str(e)
 
-    def _execute_remote(self, command: str, work_dir: Optional[str], stream_output: bool) -> Tuple[bool, str]:
+    def _execute_remote(self, command: str, work_dir: Optional[str],
+                         stream_output: bool, output_callback: Optional[Callable]) -> Tuple[bool, str]:
         """远程执行命令"""
         import sys
         import threading
@@ -122,10 +130,8 @@ class SSHClient:
         full_command = f"cd {work_dir} && bash -s" if work_dir else "bash -s"
 
         try:
-            if stream_output:
-                # 实时输出模式
-                # SSH keepalive 选项: 每 30 秒发送心跳，容忍 4 小时无响应 (480 次 × 30 秒)
-                # 适应长时间运行的 benchmark (如 ASV run 持续 2+ 小时)
+            if stream_output or output_callback:
+                # 实时输出或回调模式
                 ssh_cmd = [
                     "ssh",
                     "-o", f"ConnectTimeout={self.config.timeout}",
@@ -152,26 +158,24 @@ class SSHClient:
                 output_lines = []
 
                 def read_stdout():
-                    """线程函数：读取 stdout 并实时打印"""
+                    """线程函数：读取 stdout 并处理"""
                     try:
                         for line in process.stdout:
-                            print(line, end='')
+                            if stream_output:
+                                print(line, end='')
+                            if output_callback:
+                                output_callback(line.rstrip())
                             output_lines.append(line)
                     except Exception:
                         pass
 
-                # 启动 stdout 读取线程（必须先启动，否则可能阻塞）
+                # 启动 stdout 读取线程
                 reader_thread = threading.Thread(target=read_stdout, daemon=True)
                 reader_thread.start()
 
                 # 发送脚本到 stdin
-                # 注意：脚本中可能包含嵌套 heredoc (如 <<'INNER_EOF')
-                # 需要等待一小段时间让远程 bash 开始读取 stdin 内容
-                # 然后再关闭 stdin，否则嵌套 heredoc 可能无法正确解析
                 process.stdin.write(command)
                 process.stdin.flush()
-
-                # 等待远程 bash 开始读取 stdin（约 100ms）
                 time.sleep(0.1)
                 process.stdin.close()
 
@@ -187,7 +191,6 @@ class SSHClient:
                 reader_thread.join(timeout=5)
 
                 output = ''.join(output_lines)
-
                 return process.returncode == 0, output
             else:
                 # 捕获输出模式 - 也添加 keepalive (适应长时间运行)

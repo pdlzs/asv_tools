@@ -21,6 +21,8 @@ class OutputConfig:
     custom_info: Optional[str] = None
     skip_excel: bool = False           # 是否跳过生成 Excel 文件
     skip_ratio_na: bool = False        # 是否跳过 Ratio 为 n/a 的行（影响 TXT 和 Excel）
+    parallel: bool = True              # 是否并行执行脚本（默认 True）
+    progress_lines: int = 10           # 并行执行时显示每台机器最近几行输出（默认 10）
 
 
 @dataclass
@@ -115,7 +117,9 @@ def load_config(config_path: str) -> Config:
             dir=output_data.get("dir", "./cmp_results"),
             custom_info=output_data.get("custom_info"),
             skip_excel=output_data.get("skip_excel", False),
-            skip_ratio_na=output_data.get("skip_ratio_na", False)
+            skip_ratio_na=output_data.get("skip_ratio_na", False),
+            parallel=output_data.get("parallel", True),
+            progress_lines=output_data.get("progress_lines", 10)
         ),
         runtime=RuntimeConfig(
             ssh_timeout=runtime_data.get("ssh_timeout", 30),

@@ -152,6 +152,8 @@ python/
 - `output.dir`: 输出目录，默认 `./cmp_results`
 - `output.skip_excel`: 是否跳过生成 Excel 文件（默认 false）
 - `output.skip_ratio_na`: 是否跳过 Ratio 为 n/a 的行（默认 false，影响 TXT 和 Excel）
+- `output.parallel`: 是否并行执行脚本（默认 true）
+- `output.progress_lines`: 并行执行时显示每台机器最近几行输出（默认 10）
 
 **collect 采集输出**: 当 `compare.collect: true` 时，采集结果保存在输出目录的 `perf_config/` 子目录下。
 

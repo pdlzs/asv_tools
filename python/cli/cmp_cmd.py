@@ -8,6 +8,7 @@ from typing import Optional, Tuple
 
 from core.config import Config, load_config
 from core.executor import execute_on_machine
+from core.parallel_executor import execute_parallel, execute_serial, ExecutionResult
 from core.downloader import download_results
 from core.perf_collector import PerfCollector, perf_config_to_yaml
 from core.perf_comparator import PerfComparator
@@ -191,16 +192,49 @@ def run_compare(args) -> int:
         if args.skip_run:
             print("跳过 ASV 运行 (--skip-run)")
         elif not args.dry_run:
-            for name, machine in config.machines.items():
-                script = config.get_compare_script_for_machine(name)
-                if not execute_on_machine(
-                    machine, script, args.dry_run, args.verbose,
+            # 构建脚本字典
+            scripts = {name: config.get_compare_script_for_machine(name) for name in config.machines}
+
+            if config.output.parallel:
+                # 并行执行
+                results = execute_parallel(
+                    machines=config.machines,
+                    scripts=scripts,
                     export_vars=config.export,
                     ssh_timeout=config.runtime.ssh_timeout,
-                    execution_timeout=config.runtime.execution_timeout
-                ):
-                    print(f"在 {name} 上执行脚本失败", file=sys.stderr)
+                    execution_timeout=config.runtime.execution_timeout,
+                    show_progress=True,
+                    progress_lines=config.output.progress_lines
+                )
+
+                # 输出各机器的日志（按顺序）
+                for result in results:
+                    print(f"\n{'='*50}")
+                    print(f"{result.machine_name} 执行日志 (耗时: {result.duration:.1f}s)")
+                    print(f"{'='*50}")
+                    if result.output:
+                        print(result.output)
+                    if result.success:
+                        print(f"[{result.machine_name}] 执行完成")
+                    else:
+                        print(f"[{result.machine_name}] 执行失败", file=sys.stderr)
+
+                # 检查是否全部成功
+                if not all(r.success for r in results):
+                    print("部分机器执行失败", file=sys.stderr)
                     return 1
+            else:
+                # 串行执行（保持原有逻辑，实时输出）
+                for name, machine in config.machines.items():
+                    script = config.get_compare_script_for_machine(name)
+                    if not execute_on_machine(
+                        machine, script, args.dry_run, args.verbose,
+                        export_vars=config.export,
+                        ssh_timeout=config.runtime.ssh_timeout,
+                        execution_timeout=config.runtime.execution_timeout
+                    ):
+                        print(f"在 {name} 上执行脚本失败", file=sys.stderr)
+                        return 1
         else:
             # dry-run 模式下显示脚本
             for name, machine in config.machines.items():
