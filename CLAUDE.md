@@ -4,10 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概述
 
-ASV Benchmark 对比工具，提供三种模式：
+ASV Benchmark 对比工具，提供四种模式：
 1. **跨机器对比 (cmp)**: 在多台服务器上执行 ASV benchmark 并对比结果，使用 `asv compare` 命令
 2. **Commit 对比 (cont)**: 在指定机器上对比两个 commit 的性能，使用 `asv continuous` 命令。支持单机或多机执行
 3. **性能配置采集 (collect)**: 采集各机器的性能相关配置（CPU、内存、BIOS、环境等）并对比差异
+4. **Excel Ratio 对比 (cmp-excel)**: 对比两次 benchmark Excel 结果的 Ratio 值差异
 
 输出 TXT 和 Excel 格式报告。
 
@@ -56,6 +57,22 @@ python main.py collect ../collect.yaml
 
 **容错设计**：单项采集失败不影响其他项，失败项记录为 NA。
 
+### Excel Ratio 对比 (cmp-excel)
+```bash
+cd python
+python main.py cmp-excel <before.xlsx> <after.xlsx> [--output output.xlsx] [-v]
+```
+对比两次 benchmark Excel 结果的 Ratio 值差异。
+
+**输出表格**：
+| Benchmark (Parameter) | Before Ratio | After Ratio | Ratio Diff |
+
+**说明**：
+- `Ratio Diff` = Before - After，正值表示性能提升，负值表示性能劣化
+- 不匹配的 benchmark（仅在 Before 或 After 中存在）放在表格末尾，Ratio Diff 显示 `n/a`
+- 自动着色：绿色(性能提升)、红色(性能劣化)、灰色(n/a)
+- `-v/--verbose`: 在终端打印对比表格（带颜色标记）
+
 ### 常用选项
 - `--delay TIME, -d`: 延时执行，支持 `s`（秒）、`m`（分钟）、`h`（小时），如 `-d 10s`、`-d 30m`、`-d 6h`
 - `--skip-run, -s`: 跳过 ASV 运行，直接使用已有结果对比 (仅 cmp)
@@ -78,6 +95,7 @@ python/
 │   ├── cmp_cmd.py       # cmp 子命令实现，跨机器对比
 │   ├── cont_cmd.py      # cont 子命令实现，单机 commit 对比
 │   ├── collect_cmd.py   # collect 子命令实现，性能配置采集
+│   ├── cmp_excel_cmd.py # cmp-excel 子命令实现，Excel Ratio 对比
 │   └── ssh_setup_cmd.py # ssh-setup 子命令，一键配置免密登录
 ├── core/
 │   ├── machine_config.py # 统一的机器配置数据类（三种模式共用）
@@ -111,6 +129,12 @@ python/
 2. `collect_cmd.py` 加载配置 → 验证 → 测试连接 → 采集配置 → 保存 YAML → 生成对比报告
 3. `perf_collector.py` 通过 SSH 执行采集脚本，解析输出
 4. `perf_comparator.py` 对比多个配置，生成 Markdown 报告
+
+**cmp-excel 命令**:
+1. `main.py` 解析 CLI 参数（before/after 文件路径）
+2. `cmp_excel_cmd.py` 读取两个 Excel 文件的 Ratio 列
+3. 对比 benchmark 名称，计算 Ratio Diff（Before - After）
+4. 输出 Excel 对比表格，自动着色（绿/红/灰）
 
 ### 关键设计
 

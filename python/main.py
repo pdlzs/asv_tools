@@ -89,6 +89,14 @@ def main():
     collect_parser.add_argument('--output-dir', '-o', help='Output directory')
     collect_parser.add_argument('--info', '-i', help='Custom info for output filename')
 
+    # cmp-excel 子命令
+    cmp_excel_parser = subparsers.add_parser('cmp-excel', help='Compare Ratio values between two Excel files')
+    cmp_excel_parser.add_argument('before', help='Before Excel file path')
+    cmp_excel_parser.add_argument('after', help='After Excel file path')
+    cmp_excel_parser.add_argument('--output', '-o', help='Output Excel file path (default: auto-generated)')
+    cmp_excel_parser.add_argument('--verbose', '-v', action='store_true',
+                                  help='Print comparison table to terminal')
+
     args = parser.parse_args()
 
     # 处理延迟执行
@@ -109,6 +117,9 @@ def main():
     elif args.command == 'collect':
         from cli.collect_cmd import run_collect
         sys.exit(run_collect(args))
+    elif args.command == 'cmp-excel':
+        from cli.cmp_excel_cmd import run_cmp_excel
+        sys.exit(run_cmp_excel(args))
     else:
         parser.print_help()
         sys.exit(1)
